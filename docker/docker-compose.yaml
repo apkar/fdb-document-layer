@@ -47,6 +47,10 @@ services:
   build-prb:
     <<: *build-snapshot
 
+  clang-format-prb:
+    <<: *snapshot-setup
+    command: bash -cl 'mkdir -p build && cd build && cmake .. && make check-format'
+
   test-release:
     <<: *release-setup
     environment:
