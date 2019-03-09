@@ -534,7 +534,7 @@ ACTOR void setup(NetworkAddress na,
 				_exit(FDB_EXIT_ERROR);
 			}
 		}
-		statusUpdateActor(FDB_DOC_VT_PACKAGE_NAME, toIPString(na.ip), na.port, docLayer, timer() * 1000);
+//		statusUpdateActor(FDB_DOC_VT_PACKAGE_NAME, toIPString(na.ip), na.port, docLayer, timer() * 1000);
 		extServer(docLayer, na);
 
 		if (!unitTestPattern.empty())
