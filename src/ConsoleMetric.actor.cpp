@@ -19,6 +19,7 @@
  */
 
 #include "ConsoleMetric.h"
+#include "flow/actorcompiler.h" // This must be the last #include.
 
 MetricStat::MetricStat(std::string mId, IMetricType mType)
     : mId(std::move(mId)),

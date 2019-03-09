@@ -23,6 +23,8 @@
 #include "ExtUtil.actor.h"
 #include "MetadataManager.h"
 
+#include "flow/actorcompiler.h" // This must be the last #include.
+
 using namespace FDB;
 
 Future<uint64_t> getMetadataVersion(Reference<DocTransaction> tr, Reference<DirectorySubspace> metadataDirectory) {

@@ -21,6 +21,7 @@
  */
 
 #include "QLExpression.h"
+#include "flow/actorcompiler.h" // This must be the last #include.
 
 ACTOR Future<Optional<std::pair<Standalone<StringRef>, DataValue>>> getArrayAncestor(DataKey dk,
                                                                                      Reference<IReadContext> cx,

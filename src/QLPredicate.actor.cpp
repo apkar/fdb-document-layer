@@ -26,6 +26,8 @@
 #include "QLPredicate.h"
 #include "flow/UnitTest.h"
 
+#include "flow/actorcompiler.h" // This must be the last #include.
+
 ACTOR static Future<bool> evaluateAnyPredicate(Reference<IReadContext> cx,
                                                Reference<IExpression> expr,
                                                Reference<IPredicate> pred) {

@@ -56,6 +56,8 @@
 #include <pthread.h>
 #endif
 
+#include "flow/actorcompiler.h" // This must be the last #include.
+
 #define STORAGE_VERSION 4
 
 enum {

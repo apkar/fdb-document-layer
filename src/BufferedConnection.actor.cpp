@@ -21,6 +21,7 @@
 #include "BufferedConnection.h"
 
 #include "flow/Net2Packet.h"
+#include "flow/actorcompiler.h" // This must be the last #include.
 
 #define BC_BLOCK_SIZE 4096
 

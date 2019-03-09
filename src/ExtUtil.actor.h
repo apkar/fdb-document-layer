@@ -31,6 +31,8 @@
 #include "QLPredicate.h"
 #include <string>
 
+#include "flow/actorcompiler.h" // This must be the last #include.
+
 #define QLOG(...)                                                                                                      \
 	{ fprintf(stderr, __VA_ARGS__); }
 
@@ -293,4 +295,5 @@ inline bool startsWith(const char* str, const char* pre) {
 	return lenstr < lenpre ? false : strncmp(pre, str, lenpre) == 0;
 }
 
+#include "flow/unactorcompiler.h"
 #endif /* _EXT_UTIL_ACTOR_H_ */

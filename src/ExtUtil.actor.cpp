@@ -29,6 +29,8 @@
 #include "QLProjection.h"
 #include "QLTypes.h"
 
+#include "flow/actorcompiler.h" // This must be the last #include.
+
 using namespace FDB;
 
 std::string upOneLevel(std::string maybeDottedFieldName) {

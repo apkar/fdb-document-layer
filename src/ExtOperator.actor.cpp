@@ -29,6 +29,7 @@
 
 #include "QLExpression.h"
 
+#include "flow/actorcompiler.h" // This must be the last #include.
 using namespace FDB;
 
 Reference<IPredicate> queryToPredicate(bson::BSONObj const& query, bool toplevel = false);

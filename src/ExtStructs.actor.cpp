@@ -21,6 +21,8 @@
 #include "ExtStructs.h"
 #include "QLPlan.h"
 
+#include "flow/actorcompiler.h" // This must be the last #include.
+
 Reference<DocTransaction> ExtConnection::getOperationTransaction() {
 	return explicitTransaction ? tr : NonIsolatedPlan::newTransaction(docLayer->database);
 }

@@ -28,6 +28,8 @@
 
 #include "ordering.h"
 
+#include "flow/actorcompiler.h" // This must be the last #include.
+
 using namespace FDB;
 
 /**

@@ -34,6 +34,8 @@
 #include "gitVersion.h"
 #endif
 
+#include "flow/actorcompiler.h" // This must be the last #include.
+
 using namespace FDB;
 
 extern const char* getHGVersion();

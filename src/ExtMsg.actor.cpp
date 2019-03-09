@@ -43,6 +43,8 @@
 
 #include <string>
 
+#include "flow/actorcompiler.h" // This must be the last #include.
+
 using namespace FDB;
 
 REGISTER_MSG(ExtMsgQuery);

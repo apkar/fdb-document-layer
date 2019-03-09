@@ -20,6 +20,8 @@
 
 #include "QLProjection.h"
 
+#include "flow/actorcompiler.h" // This must be the last #include.
+
 ACTOR Future<bson::BSONObj> projectDocument_impl(Reference<IReadContext> doc, Reference<Projection> projection) {
 	try {
 		// If we are just reading the root document, then we can return the whole thing
