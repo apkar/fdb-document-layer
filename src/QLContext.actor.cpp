@@ -38,16 +38,16 @@ ACTOR Future<Void> DocTransaction::commitChanges(Reference<DocTransaction> self,
 	auto info = self->infos.find(docPrefix);
 	if (info == self->infos.end())
 		return Void();
-	Void _ = wait(info->second->commitChanges(self));
+	wait(info->second->commitChanges(self));
 	return Void();
 }
 
 ACTOR Future<Void> DocumentDeferred::commitChanges(Reference<DocTransaction> tr, Reference<DocumentDeferred> self) {
-	Void _ = wait(self->snapshotLock.onUnused());
+	wait(self->snapshotLock.onUnused());
 	for (auto& f : self->deferred)
 		f(tr);
 	self->writes_finished.send(Void());
-	Void _ = wait(waitForAll(self->index_update_actors));
+	wait(waitForAll(self->index_update_actors));
 	self->writes_finished = Promise<Void>();
 	return Void();
 }
@@ -150,7 +150,7 @@ ACTOR static Future<Void> FDBPlugin_getDescendants(DataKey key,
 			while (!rr.empty()) {
 				state int permits = rr.size();
 				if (flowControlLock)
-					Void _ = wait(flowControlLock->lock->takeUpTo(permits));
+					wait(flowControlLock->lock->takeUpTo(permits));
 
 				for (int i = 0; i < permits; i++) {
 					auto& kv = rr[i];
@@ -337,7 +337,7 @@ struct CompoundIndexPlugin : IndexPlugin, ReferenceCounted<CompoundIndexPlugin>,
 
 			dd->snapshotLock.unuse();
 
-			Void _ = wait(writes_finished);
+			wait(writes_finished);
 
 			std::vector<Future<std::vector<DataValue>>> f_new_values;
 			for (const auto& expr : self->exprs) {
@@ -368,7 +368,7 @@ struct CompoundIndexPlugin : IndexPlugin, ReferenceCounted<CompoundIndexPlugin>,
 					// When building the unique index, each record out of the table scan needs to wait for the previous
 					// one finished duplication detecting and index record writing. And thus the following section
 					// before the `lock.release()` call, needs to be protected using a mutex lock.
-					Void _ = wait(self->flowControlLock.get()->lock->take(1));
+					wait(self->flowControlLock.get()->lock->take(1));
 				}
 				for (; nvv; ++nvv) {
 					DataKey potential_index_key(self->indexPath);
@@ -484,7 +484,7 @@ struct SimpleIndexPlugin : IndexPlugin, ReferenceCounted<SimpleIndexPlugin>, Fas
 
 			dd->snapshotLock.unuse();
 
-			Void _ = wait(writes_finished);
+			wait(writes_finished);
 
 			state std::vector<DataValue> new_values =
 			    wait(consumeAll(mapAsync(self->expr->evaluate(doc), [](Reference<IReadContext> valcx) {
@@ -499,7 +499,7 @@ struct SimpleIndexPlugin : IndexPlugin, ReferenceCounted<SimpleIndexPlugin>, Fas
 					// When building the unique index, each record out of the table scan needs to wait for the previous
 					// one finished duplication detecting and index record writing. And thus the following section
 					// before the `lock.release()` call, needs to be protected using a mutex lock.
-					Void _ = wait(self->flowControlLock.get()->lock->take(1));
+					wait(self->flowControlLock.get()->lock->take(1));
 				}
 				for (const DataValue& v : new_values) {
 					state DataKey potential_index_key(self->indexPath);

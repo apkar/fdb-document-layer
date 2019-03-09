@@ -42,7 +42,7 @@ ACTOR Future<bson::BSONObj> projectDocument_impl(Reference<IReadContext> doc, Re
 			}
 		}
 
-		Void _ = wait(waitForAll(dataValueFutures));
+		wait(waitForAll(dataValueFutures));
 
 		std::vector<BOBObj> currentPath;
 		currentPath.emplace_back(-1, "");

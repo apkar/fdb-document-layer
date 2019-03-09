@@ -805,7 +805,7 @@ ACTOR Future<WriteCmdResult> attemptIndexInsertion(bson::BSONObj indexObj,
 		if (background && !ec->explicitTransaction)
 			ec->docLayer->backgroundTasks.add(wrapError(MetadataManager::buildIndex(indexObj, ns, id, ec, build_id)));
 		else
-			Void _ = wait(MetadataManager::buildIndex(indexObj, ns, id, ec, build_id));
+			wait(MetadataManager::buildIndex(indexObj, ns, id, ec, build_id));
 
 		return WriteCmdResult(1);
 	} else {
@@ -853,7 +853,7 @@ ACTOR Future<WriteCmdResult> doInsertCmd(Namespace ns,
 ACTOR static Future<WriteResult> doInsertMsg(Future<Void> readyToWrite,
                                              Reference<ExtMsgInsert> insert,
                                              Reference<ExtConnection> ec) {
-	Void _ = wait(readyToWrite);
+	wait(readyToWrite);
 	WriteCmdResult cmdResult = wait(doInsertCmd(insert->ns, &insert->documents, ec));
 	return WriteResult(cmdResult, WriteType::INSERT);
 }
@@ -1001,7 +1001,7 @@ ACTOR Future<Void> updateDocument(Reference<IReadWriteContext> cx,
 			futures.push_back(ExtUpdateOperator::execute(operatorName, cx, encodeMaybeDotted(fn), subel));
 		}
 	}
-	Void _ = wait(waitForAll(futures));
+	wait(waitForAll(futures));
 	return Void();
 }
 
@@ -1073,7 +1073,7 @@ ACTOR Future<WriteCmdResult> doUpdateCmd(Namespace ns,
 ACTOR static Future<WriteResult> doUpdateMsg(Future<Void> readyToWrite,
                                              Reference<ExtMsgUpdate> msg,
                                              Reference<ExtConnection> ec) {
-	Void _ = wait(readyToWrite);
+	wait(readyToWrite);
 	state std::vector<ExtUpdateCmd> cmds;
 	cmds.emplace_back(msg->selector, msg->update, msg->upsert, msg->multi);
 	WriteCmdResult cmdResult = wait(doUpdateCmd(msg->ns, true, &cmds, ec));
@@ -1220,7 +1220,7 @@ ACTOR Future<WriteCmdResult> doDeleteCmd(Namespace ns,
 ACTOR static Future<WriteResult> doDeleteMsg(Future<Void> readyToWrite,
                                              Reference<ExtMsgDelete> msg,
                                              Reference<ExtConnection> ec) {
-	Void _ = wait(readyToWrite);
+	wait(readyToWrite);
 	WriteCmdResult cmdResult = wait(doDeleteCmd(msg->ns, true, &msg->selectors, ec));
 	if (cmdResult.writeErrors.empty())
 		return WriteResult(cmdResult, WriteType::REMOVAL);
@@ -1339,7 +1339,7 @@ struct ExtOperatorUpsert : ConcreteInsertOp<ExtOperatorUpsert> {
 			thingToInsert = transformOperatorQueryToUpdatableDocument(self->selector);
 		}
 		state Reference<IReadWriteContext> dcx = wait(insertDocument(cx, thingToInsert, encodedIds));
-		Void _ = wait(updateDocument(dcx, self->update, true, dcx->getKeyEncodedId()));
+		wait(updateDocument(dcx, self->update, true, dcx->getKeyEncodedId()));
 		return dcx;
 	}
 

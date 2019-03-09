@@ -74,10 +74,10 @@ ACTOR void statusUpdateActor(std::string version,
 				                                              return tr->tr->watch(instanceKey);
 			                                              },
 			                                              3, 5000));
-			Void _ = wait(watch || delay(10.0));
+			wait(watch || delay(10.0));
 		} catch (Error& e) {
 			TraceEvent(SevWarnAlways, "Unable to write status").detail("Error", e.what());
-			Void _ = wait(delay(5.0));
+			wait(delay(5.0));
 		}
 	}
 }

@@ -183,7 +183,7 @@ ACTOR Future<Void> ensureValidObject(Reference<IReadWriteContext> cx,
 	} else if (createRoot) {
 		cx->set(encodedObjectRoot, DataValue::subObject().encode_value());
 		if (upOneLevel(objectRoot) != "") {
-			Void _ = wait(ensureValidObject(cx, upOneLevel(objectRoot), getLastPart(objectRoot), createRoot));
+			wait(ensureValidObject(cx, upOneLevel(objectRoot), getLastPart(objectRoot), createRoot));
 		}
 	}
 

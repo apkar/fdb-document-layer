@@ -82,7 +82,7 @@ ACTOR static Future<std::pair<int, int>> dropIndexMatching(Reference<DocTransact
 	matchingIndex->clearDescendants();
 	matchingIndex->clearRoot();
 
-	Void _ = wait(matchingIndex->commitChanges());
+	wait(matchingIndex->commitChanges());
 
 	Key indexKey = targetedCollection->getIndexesSubspace().withSuffix(StringRef(encodeMaybeDotted(matchingName)));
 	tr->tr->clear(FDB::KeyRangeRef(indexKey, strinc(indexKey)));
@@ -108,13 +108,13 @@ ACTOR static Future<Reference<ExtMsgReply>> doDropDatabase(Reference<ExtConnecti
 		// have concurrent modification of a document. If it isn't an explicit transaction, the ranges we write ensure
 		// that this will conflict with anything it needs to conflict with.
 		if (ec->explicitTransaction) {
-			Void _ = wait(Internal_doDropDatabase(ec->tr, query, ec->docLayer->rootDirectory));
+			wait(Internal_doDropDatabase(ec->tr, query, ec->docLayer->rootDirectory));
 		} else {
-			Void _ = wait(runRYWTransaction(ec->docLayer->database,
-			                                [this](Reference<DocTransaction> tr) {
-				                                return Internal_doDropDatabase(tr, query, ec->docLayer->rootDirectory);
-			                                },
-			                                ec->options.retryLimit, ec->options.timeoutMillies));
+			wait(runRYWTransaction(ec->docLayer->database,
+			                       [this](Reference<DocTransaction> tr) {
+				                       return Internal_doDropDatabase(tr, query, ec->docLayer->rootDirectory);
+			                       },
+			                       ec->options.retryLimit, ec->options.timeoutMillies));
 		}
 
 		reply->addDocument(BSON("ok" << 1.0));
@@ -355,7 +355,7 @@ ACTOR static Future<Void> Internal_doDropCollection(Reference<DocTransaction> tr
                                                     Reference<MetadataManager> mm) {
 	state Reference<UnboundCollectionContext> unbound = wait(mm->getUnboundCollectionContext(tr, query->ns));
 	int _ = wait(internal_doDropIndexesActor(tr, query->ns, mm));
-	Void _ = wait(unbound->collectionDirectory->remove(tr->tr));
+	wait(unbound->collectionDirectory->remove(tr->tr));
 	return Void();
 }
 
@@ -368,9 +368,9 @@ ACTOR static Future<Reference<ExtMsgReply>> doDropCollection(Reference<ExtConnec
 		// have concurrent modification of a document. If it isn't an explicit transaction, the ranges we write ensure
 		// that this will conflict with anything it needs to conflict with.
 		if (ec->explicitTransaction) {
-			Void _ = wait(Internal_doDropCollection(ec->tr, query, ec->mm));
+			wait(Internal_doDropCollection(ec->tr, query, ec->mm));
 		} else {
-			Void _ = wait(runRYWTransaction(
+			wait(runRYWTransaction(
 			    ec->docLayer->database,
 			    [this](Reference<DocTransaction> tr) { return Internal_doDropCollection(tr, query, ec->mm); },
 			    ec->options.retryLimit, ec->options.timeoutMillies));
@@ -674,7 +674,7 @@ ACTOR static Future<Reference<ExtMsgReply>> doCreateIndexes(Reference<ExtConnect
 		f.push_back(attemptIndexInsertion(indexDoc, ec, ec->getOperationTransaction(), query->ns));
 	}
 	try {
-		Void _ = wait(waitForAll(f));
+		wait(waitForAll(f));
 		reply->addDocument(BSON("ok" << 1.0));
 	} catch (Error& e) {
 		reply->addDocument(BSON("ok" << 0.0 << "errmsg" << e.what() << "code" << e.code()));
@@ -810,9 +810,9 @@ ACTOR static Future<Reference<ExtMsgReply>> doCreateCollection(Reference<ExtConn
                                                                Reference<ExtMsgReply> reply) {
 	try {
 		if (ec->explicitTransaction) {
-			Void _ = wait(Internal_doCreateCollection(ec->tr, query, ec->mm));
+			wait(Internal_doCreateCollection(ec->tr, query, ec->mm));
 		} else {
-			Void _ = wait(runRYWTransaction(
+			wait(runRYWTransaction(
 			    ec->docLayer->database,
 			    [this](Reference<DocTransaction> tr) { return Internal_doCreateCollection(tr, query, ec->mm); },
 			    ec->options.retryLimit, ec->options.timeoutMillies));
@@ -844,10 +844,10 @@ ACTOR static Future<Reference<ExtMsgReply>> doBeginActor(Reference<ExtConnection
 		try {
 			WriteResult _ = wait(ec->lastWrite);
 			if (retry)
-				Void _ = wait(ec->trError);
+				wait(ec->trError);
 		} catch (Error& e) {
 			if (retry) {
-				Void _ = wait(ec->tr->tr->onError(e));
+				wait(ec->tr->tr->onError(e));
 			}
 		}
 	} catch (Error& e) {
@@ -910,7 +910,7 @@ ACTOR static Future<Reference<ExtMsgReply>> doCommitActor(Reference<ExtConnectio
 			                 // getLastError before trying to commit.
 		}
 		try {
-			Void _ = wait(ec->tr->tr->commit());
+			wait(ec->tr->tr->commit());
 			ec->lastWrite = WriteResult();
 			ec->trError = Void();
 			reply->addDocument(BSON("ok" << 1.0));
@@ -1224,7 +1224,7 @@ struct ListCollectionsCmd {
 					break;
 				}
 				if (e.code() != error_code_actor_cancelled) {
-					Void _ = wait(dtr->tr->onError(e));
+					wait(dtr->tr->onError(e));
 				}
 			}
 		}
@@ -1304,7 +1304,7 @@ struct ListIndexesCmd {
 				return reply;
 			} catch (Error& e) {
 				if (e.code() != error_code_actor_cancelled) {
-					Void _ = wait(dtr->tr->onError(e));
+					wait(dtr->tr->onError(e));
 				}
 			}
 		}
@@ -1338,20 +1338,20 @@ ACTOR static Future<Reference<ExtMsgReply>> getStreamDistinct(Reference<ExtConne
 		state FutureStream<Reference<ScanReturnedContext>> queryResults = qrPlan->execute(checkpoint.getPtr(), dtr);
 		state PromiseStream<Reference<ScanReturnedContext>> filteredResults;
 
-		Void _ = wait(asyncFilter(queryResults,
-		                          [this](Reference<ScanReturnedContext> queryResult) mutable {
-			                          scanned++;
-			                          return map(predicate->evaluate(queryResult), [this](bool keep) mutable {
-				                          if (keep)
-					                          filtered++;
-				                          // For `distinct`, accumulated distinct values are already held in the
-				                          // distinctPredicate, and the returned kv is no longer needed by any
-				                          // upstream caller after this point. Thus release it immediately.
-				                          flowControlLock->release();
-				                          return keep;
-			                          });
-		                          },
-		                          filteredResults));
+		wait(asyncFilter(queryResults,
+		                 [this](Reference<ScanReturnedContext> queryResult) mutable {
+			                 scanned++;
+			                 return map(predicate->evaluate(queryResult), [this](bool keep) mutable {
+				                 if (keep)
+					                 filtered++;
+				                 // For `distinct`, accumulated distinct values are already held in the
+				                 // distinctPredicate, and the returned kv is no longer needed by any
+				                 // upstream caller after this point. Thus release it immediately.
+				                 flowControlLock->release();
+				                 return keep;
+			                 });
+		                 },
+		                 filteredResults));
 
 		bson::BSONArrayBuilder arrayBuilder;
 		distinctPredicate->collectDataValues(arrayBuilder);

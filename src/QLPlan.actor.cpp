@@ -333,7 +333,7 @@ ACTOR static Future<Void> toDocInfo(PlanCheckpoint* checkpoint,
 		loop {
 			state KeyValue kv = waitNext(index_keys);
 			inputLock->lock->release();
-			Void _ = wait(outputLock->take());
+			wait(outputLock->take());
 			lastKey = Key(kv.key, kv.arena());
 			// fprintf(stderr, "lastkey: %s\n", printable(lastKey).c_str());
 			Standalone<StringRef> last(DataKey::decode_item_rev(kv.key, 0), kv.arena());
@@ -520,7 +520,7 @@ ACTOR static Future<Void> doSinglePKLookup(PlanCheckpoint* checkpoint,
 		if (x >= scanBounds.begin && x < scanBounds.end) {
 			Optional<DataValue> odv = wait(cx->cx->get(x));
 			if (odv.present()) {
-				Void _ = wait(flowControlLock->take(1));
+				wait(flowControlLock->take(1));
 				dis.send(Reference<ScanReturnedContext>(new ScanReturnedContext(
 				    cx->cx->getSubContext(begin.encode_key_part()), scanID, StringRef(begin.encode_key_part()))));
 			}
@@ -549,7 +549,7 @@ ACTOR static Future<Void> doPKScan(PlanCheckpoint* checkpoint,
 			if (curPK.compare(lastPK)) {
 				lastPK = Standalone<StringRef>(curPK, kv.arena());
 				// We are adding a brand new document, so
-				Void _ = wait(outputLock->take(1));
+				wait(outputLock->take(1));
 				output.send(Reference<ScanReturnedContext>(
 				    new ScanReturnedContext(cx->cx->getSubContext(lastPK), scanID, Key(kv.key, kv.arena()))));
 			}
@@ -715,7 +715,7 @@ ACTOR static Future<Void> doNonIsolatedRO(PlanCheckpoint* outerCheckpoint,
 			loop choose {
 				when(state Reference<ScanReturnedContext> doc =
 				         waitNext(docs)) { // throws end_of_stream when totally finished
-					Void _ = wait(outerLock->take(1));
+					wait(outerLock->take(1));
 					innerLock->release();
 					output.send(doc);
 					++nResults;
@@ -725,7 +725,7 @@ ACTOR static Future<Void> doNonIsolatedRO(PlanCheckpoint* outerCheckpoint,
 					}
 					// if (oCount == 3) timeout = delay(0);
 				}
-				when(Void _ = wait(timeout)) { break; }
+				when(wait(timeout)) { break; }
 			}
 
 			ASSERT(!docs.isReady());
@@ -800,12 +800,12 @@ ACTOR static Future<Void> doNonIsolatedRW(PlanCheckpoint* outerCheckpoint,
 									first = false;
 								}
 							}
-							when(Void _ = wait(committingDocs.empty() ? Never() : committingDocs.front().second)) {
+							when(wait(committingDocs.empty() ? Never() : committingDocs.front().second)) {
 								bufferedDocs.push_back(committingDocs.front().first);
 								committingDocs.pop_front();
 								innerLock->release(1);
 							}
-							when(Void _ = wait(timeout)) { break; }
+							when(wait(timeout)) { break; }
 						}
 					}
 					ASSERT(!docs.isReady());
@@ -823,7 +823,7 @@ ACTOR static Future<Void> doNonIsolatedRW(PlanCheckpoint* outerCheckpoint,
 				// This section MUST come before the call to dtr->cancel_ongoing_index_reads(), since these futures
 				// refer to documents that we are considering committed.
 				while (!committingDocs.empty()) {
-					Void _ = wait(committingDocs.front().second);
+					wait(committingDocs.front().second);
 					bufferedDocs.push_back(committingDocs.front().first);
 					committingDocs.pop_front();
 				}
@@ -839,7 +839,7 @@ ACTOR static Future<Void> doNonIsolatedRW(PlanCheckpoint* outerCheckpoint,
 				// when we cancel these actors.
 				dtr->cancel_ongoing_index_reads();
 
-				Void _ = wait(dtr->tr->commit());
+				wait(dtr->tr->commit());
 
 				// Ideally we shouldn't do anything on this transaction anymore. But caller of this code would try to
 				// read the upserted document with this transaction. There is no need to use same 'dtr' transaction
@@ -850,14 +850,14 @@ ACTOR static Future<Void> doNonIsolatedRW(PlanCheckpoint* outerCheckpoint,
 				                                   // redoing this part
 
 				while (!bufferedDocs.empty()) {
-					Void _ = wait(outerLock->take(1));
+					wait(outerLock->take(1));
 					Reference<ScanReturnedContext> finishedDoc = bufferedDocs.front();
 					output.send(finishedDoc);
 					++oCount;
 					bufferedDocs.pop_front();
 				}
 			} catch (Error& e) {
-				Void _ = wait(dtr->tr->onError(e));
+				wait(dtr->tr->onError(e));
 				finished = false;
 			}
 
@@ -919,7 +919,7 @@ ACTOR static Future<Void> doRetry(Reference<Plan> subPlan,
 							when(Reference<ScanReturnedContext> next = waitNext(docs)) {
 								committing.push_back(std::make_pair(next, next->commitChanges()));
 							}
-							when(Void _ = wait(committing.empty() ? Never() : committing.front().second)) {
+							when(wait(committing.empty() ? Never() : committing.front().second)) {
 								ret.push_back(committing.front().first);
 								committing.pop_front();
 								innerLock->release();
@@ -933,13 +933,13 @@ ACTOR static Future<Void> doRetry(Reference<Plan> subPlan,
 				}
 
 				while (!committing.empty()) {
-					Void _ = wait(committing.front().second);
+					wait(committing.front().second);
 					ret.push_back(committing.front().first);
 					committing.pop_front();
 					innerLock->release();
 				}
 
-				Void _ = wait(tr->tr->commit());
+				wait(tr->tr->commit());
 				// Ideally we shouldn't do anything on this transaction anymore. But caller of this code, createIndexes,
 				// would try to read the added index with this transaction. There is no need to use same document
 				// transaction except that code is structured in a way makes it hard to use any other transaction.
@@ -948,7 +948,7 @@ ACTOR static Future<Void> doRetry(Reference<Plan> subPlan,
 				state Reference<ScanReturnedContext> r;
 				for (const Reference<ScanReturnedContext>& loopThing : ret) {
 					r = loopThing;
-					Void _ = wait(outerLock->take(1));
+					wait(outerLock->take(1));
 					output.send(r);
 				}
 				throw end_of_stream();
@@ -957,7 +957,7 @@ ACTOR static Future<Void> doRetry(Reference<Plan> subPlan,
 					throw;
 				if (e.code() == error_code_end_of_stream)
 					throw;
-				Void _ = wait(tr->tr->onError(e));
+				wait(tr->tr->onError(e));
 				tr = self->newTransaction(); // FIXME: keep dtr->tr if this is a retry
 			}
 		}
@@ -1051,7 +1051,7 @@ ACTOR static Future<Void> doFlushChanges(PlanCheckpoint* checkpoint,
 						    nextInput->commitChanges())); // FIXME: this will be unsafe with unique indexes. Something
 						                                  // has to happen here that doesn't kill performance.
 					}
-					when(Void _ = wait(futures.empty() ? Never() : futures.front().second)) {
+					when(wait(futures.empty() ? Never() : futures.front().second)) {
 						output.send(futures.front().first);
 						futures.pop_front();
 					}
@@ -1065,7 +1065,7 @@ ACTOR static Future<Void> doFlushChanges(PlanCheckpoint* checkpoint,
 		}
 
 		while (!futures.empty()) {
-			Void _ = wait(futures.front().second);
+			wait(futures.front().second);
 			output.send(futures.front().first);
 			futures.pop_front();
 		}
@@ -1104,7 +1104,7 @@ ACTOR static Future<Void> doUpdate(PlanCheckpoint* checkpoint,
 					if (count >= limit)
 						break;
 				}
-				when(Void _ = wait(futures.empty() ? Never() : futures.front().second)) {
+				when(wait(futures.empty() ? Never() : futures.front().second)) {
 					output.send(futures.front().first);
 					futures.pop_front();
 				}
@@ -1115,13 +1115,13 @@ ACTOR static Future<Void> doUpdate(PlanCheckpoint* checkpoint,
 		}
 
 		while (!futures.empty()) {
-			Void _ = wait(futures.front().second);
+			wait(futures.front().second);
 			output.send(futures.front().first);
 			futures.pop_front();
 		}
 
 		if (upsertOp && count == 0) {
-			Void _ = wait(flowControlLock->take());
+			wait(flowControlLock->take());
 			Reference<IReadWriteContext> inserted = wait(upsertOp->insert(cx->bindCollectionContext(tr)));
 			output.send(ref(new ScanReturnedContext(inserted, -1, FDB::Key()))); //< Is this choice of scanId etc right?
 		}
@@ -1191,7 +1191,7 @@ ACTOR static Future<Void> findAndModify(PlanCheckpoint* outerCheckpoint,
 						any = true;
 						break;
 					}
-					when(Void _ = wait(timeout)) { break; }
+					when(wait(timeout)) { break; }
 				}
 			} catch (Error& e) {
 				if (e.code() != error_code_end_of_stream)
@@ -1234,14 +1234,14 @@ ACTOR static Future<Void> findAndModify(PlanCheckpoint* outerCheckpoint,
 		}
 
 		if (any)
-			Void _ = wait(updateOp->update(firstDoc));
+			wait(updateOp->update(firstDoc));
 		else if (upsertOp) {
 			Reference<IReadWriteContext> inserted = wait(upsertOp->insert(cx->bindCollectionContext(dtr)));
 			firstDoc = ref(new ScanReturnedContext(inserted, -1, FDB::Key()));
 		}
 
 		if (any || upsertOp) {
-			Void _ = wait(firstDoc->commitChanges());
+			wait(firstDoc->commitChanges());
 		}
 
 		if (projectNew && (any || upsertOp)) {
@@ -1249,13 +1249,13 @@ ACTOR static Future<Void> findAndModify(PlanCheckpoint* outerCheckpoint,
 			proj = project;
 		}
 
-		Void _ = wait(dtr->tr->commit());
+		wait(dtr->tr->commit());
 		// Ideally we shouldn't do anything on this transaction anymore. But caller of this code would try to
 		// read the updated documents with this transaction. There is no need to use same 'dtr' transaction
 		// except that code is structured in a way makes it hard to use any other transaction.
 		dtr->tr = NonIsolatedPlan::newTransaction(database)->tr;
 
-		Void _ = wait(outerLock->take());
+		wait(outerLock->take());
 
 		// fprintf(stderr, "any: %d projectNew %d upsertOp %d\n", any, projectNew, (bool)upsertOp);
 
@@ -1312,15 +1312,15 @@ ACTOR static Future<Void> projectAndUpdate(PlanCheckpoint* checkpoint,
 		}
 
 		if (any)
-			Void _ = wait(updateOp->update(firstDoc));
+			wait(updateOp->update(firstDoc));
 		else if (upsertOp) {
-			Void _ = wait(flowControlLock->take());
+			wait(flowControlLock->take());
 			Reference<IReadWriteContext> inserted = wait(upsertOp->insert(cx->bindCollectionContext(tr)));
 			firstDoc = ref(new ScanReturnedContext(inserted, -1, FDB::Key()));
 		}
 
 		if (any || upsertOp) {
-			Void _ = wait(firstDoc->commitChanges());
+			wait(firstDoc->commitChanges());
 		}
 
 		if (projectNew && (any || upsertOp)) {
@@ -1393,7 +1393,7 @@ ACTOR static Future<Void> doIndexInsert(PlanCheckpoint* checkpoint,
                                         Reference<MetadataManager> mm) {
 	state PlanCheckpoint::FlowControlLock* flowControlLock = checkpoint->getDocumentFinishedLock();
 	try {
-		Void _ = wait(flowControlLock->take(1));
+		wait(flowControlLock->take(1));
 		state Reference<UnboundCollectionContext> mcx = wait(mm->getUnboundCollectionContext(tr, ns));
 		state Reference<UnboundCollectionContext> unbound = wait(mm->indexesCollection(tr, ns.first));
 		state Reference<Plan> getIndexesPlan = getIndexesForCollectionPlan(unbound, ns);
@@ -1449,7 +1449,7 @@ ACTOR static Future<Void> doInsert(PlanCheckpoint* checkpoint,
 			if (i >= docs.size())
 				break;
 			choose {
-				when(Void _ = wait(flowControlLock->take())) {
+				when(wait(flowControlLock->take())) {
 					f.push_back(docs[i]->insert(ucx->bindCollectionContext(tr)));
 					i++;
 				}
@@ -1524,7 +1524,7 @@ ACTOR static Future<Void> doSort(PlanCheckpoint* outerCheckpoint,
 	state int i = 0;
 	try {
 		for (; i < returnProjections.size(); ++i) {
-			Void _ = wait(outerLock->take());
+			wait(outerLock->take());
 			output.send(ref(new ScanReturnedContext(
 			    ref(new BsonContext(returnProjections[i].getObjectField("doc").getOwned(), false)), -1, Key())));
 		}
@@ -1578,7 +1578,7 @@ ACTOR static Future<Void> updateIndexStatus(PlanCheckpoint* checkpoint,
 		}
 
 		if (okay) {
-			Void _ = wait(flowControlLock->take());
+			wait(flowControlLock->take());
 			indexDoc->set(DataValue("status", DVTypeCode::STRING).encode_key_part(),
 			              DataValue(newStatus, DVTypeCode::STRING).encode_value());
 			indexDoc->clear(DataValue("currently processing document", DVTypeCode::STRING).encode_key_part());
@@ -1677,14 +1677,14 @@ ACTOR static Future<Void> scanAndBuildIndex(PlanCheckpoint* checkpoint,
 				indexDoc->set(DataValue("currently processing document", DVTypeCode::STRING).encode_key_part(),
 				              DataValue("unknown", DVTypeCode::STRING).encode_value());
 			}
-			Void _ = wait(indexDoc->commitChanges());
+			wait(indexDoc->commitChanges());
 		}
 		try {
 			loop choose {
 				when(state Reference<ScanReturnedContext> doc = waitNext(input)) {
 					futures.push_back(std::make_pair(doc, buildIndexEntry(doc, index)));
 				}
-				when(Void _ = wait(futures.empty() ? Never() : futures.front().second)) {
+				when(wait(futures.empty() ? Never() : futures.front().second)) {
 					output.send(futures.front().first);
 					futures.pop_front();
 				}
@@ -1695,7 +1695,7 @@ ACTOR static Future<Void> scanAndBuildIndex(PlanCheckpoint* checkpoint,
 		}
 
 		while (!futures.empty()) {
-			Void _ = wait(futures.front().second);
+			wait(futures.front().second);
 			output.send(futures.front().first);
 			futures.pop_front();
 		}
@@ -1883,7 +1883,7 @@ void PlanCheckpoint::boundToStopPoint() {
 }
 
 ACTOR void uncancellableHoldActor(Future<Void> held) {
-	Void _ = wait(held);
+	wait(held);
 }
 
 void PlanCheckpoint::stop() {

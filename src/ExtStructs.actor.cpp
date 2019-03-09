@@ -47,7 +47,7 @@ Reference<Plan> ExtConnection::isolatedWrapOperationPlan(Reference<Plan> plan, i
 
 ACTOR Future<Void> housekeeping_impl(Reference<ExtConnection> ec) {
 	loop {
-		Void _ = wait(delay(DOCLAYER_KNOBS->CURSOR_EXPIRY));
+		wait(delay(DOCLAYER_KNOBS->CURSOR_EXPIRY));
 		try {
 			Cursor::prune(ec->cursors);
 		} catch (Error& e) {

@@ -163,7 +163,7 @@ void MetricStat::reset() {
 
 ACTOR static Future<Void> publisher(ConsoleMetric* self) {
 	loop {
-		Void _ = wait(delay(self->flushIntervalSeconds));
+		wait(delay(self->flushIntervalSeconds));
 		self->publish();
 	}
 }

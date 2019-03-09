@@ -303,7 +303,7 @@ ACTOR static Future<Void> doRenameActor(Reference<IReadWriteContext> firstCx,
 		// update document validation in this case we can't, because we don't want a bunch of ghost objects if the query
 		// is well-formatted but the field to be renamed doesn't exist.
 		if (renamedRoot != "") {
-			Void _ = wait(ensureValidObject(docCx, renamedRoot, renamedField, true));
+			wait(ensureValidObject(docCx, renamedRoot, renamedField, true));
 		}
 	}
 

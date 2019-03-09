@@ -134,7 +134,7 @@ extern bool g_crashOnError;
 
 ACTOR Future<Void> wrapError(Future<Void> actorThatCouldThrow) {
 	try {
-		Void _ = wait(actorThatCouldThrow);
+		wait(actorThatCouldThrow);
 	} catch (Error& e) {
 		TraceEvent(SevError, "BackgroundTask").detail("Error", e.what()).backtrace();
 	}
@@ -163,7 +163,7 @@ ACTOR Future<Void> popDisposedMessages(Reference<BufferedConnection> bc,
 	loop {
 		state std::pair<int, Future<Void>> s = waitNext(msg_size_inuse);
 		try {
-			Void _ = wait(s.second);
+			wait(s.second);
 		} catch (...) {
 		}
 		bc->pop(s.first);
@@ -188,19 +188,19 @@ ACTOR Future<Void> extServerConnection(Reference<DocumentLayer> docLayer,
 			state Promise<Void> finished; // will be broken (or set or whatever) only when the memory we are passing to
 			                              // processRequest is no longer needed and can be popped
 			choose {
-				when(Void _ = wait(onError)) {
+				when(wait(onError)) {
 					if (verboseLogging)
 						TraceEvent("BD_serverClosedConnection");
 					throw connection_failed();
 				}
-				when(Void _ = wait(ec->bc->onBytesAvailable(sizeof(ExtMsgHeader)))) {
+				when(wait(ec->bc->onBytesAvailable(sizeof(ExtMsgHeader)))) {
 					auto sr = ec->bc->peekExact(sizeof(ExtMsgHeader));
 
 					state ExtMsgHeader* header = (ExtMsgHeader*)sr.begin();
 
 					// FIXME: Check for unreasonable lengths
 
-					Void _ = wait(ec->bc->onBytesAvailable(header->messageLength));
+					wait(ec->bc->onBytesAvailable(header->messageLength));
 					auto sr = ec->bc->peekExact(header->messageLength);
 
 					DocumentLayer::metricReporter->captureHistogram("messageLength", header->messageLength);
@@ -211,8 +211,7 @@ ACTOR Future<Void> extServerConnection(Reference<DocumentLayer> docLayer,
 					   for everything at and below processRequest to assume that
 					   body - header == sizeof(ExtMsgHeader) */
 					ec->updateMaxReceivedRequestID(header->requestID);
-					Void _ = wait(
-					    processRequest(ec, (ExtMsgHeader*)sr.begin(), sr.begin() + sizeof(ExtMsgHeader), finished));
+					wait(processRequest(ec, (ExtMsgHeader*)sr.begin(), sr.begin() + sizeof(ExtMsgHeader), finished));
 
 					ec->bc->advance(header->messageLength);
 					msg_size_inuse.send(std::make_pair(header->messageLength, finished.getFuture()));
@@ -240,7 +239,7 @@ ACTOR void extServer(Reference<DocumentLayer> docLayer, NetworkAddress addr) {
 				connections.add(extServerConnection(docLayer, bc, nextConnectionId));
 				nextConnectionId++;
 			}
-			when(Void _ = wait(connections.getResult())) { ASSERT(false); }
+			when(wait(connections.getResult())) { ASSERT(false); }
 		}
 	} catch (Error& e) {
 		TraceEvent(SevError, "BD_server").detail("fatal_error", e.what());
@@ -255,12 +254,12 @@ ACTOR Future<Void> extProxyHandler(Reference<BufferedConnection> src,
                                    std::string label) {
 	loop {
 		choose {
-			when(Void _ = wait(src->onBytesAvailable(sizeof(ExtMsgHeader)))) {
+			when(wait(src->onBytesAvailable(sizeof(ExtMsgHeader)))) {
 				auto sr = src->peekExact(sizeof(ExtMsgHeader));
 
 				state ExtMsgHeader* header = (ExtMsgHeader*)sr.begin();
 
-				Void _ = wait(src->onBytesAvailable(header->messageLength) && dest->onWritable());
+				wait(src->onBytesAvailable(header->messageLength) && dest->onWritable());
 				auto sr = src->peekExact(header->messageLength);
 
 				Promise<Void> finished;
@@ -274,7 +273,7 @@ ACTOR Future<Void> extProxyHandler(Reference<BufferedConnection> src,
 				src->advance(header->messageLength);
 				src->pop(header->messageLength);
 			}
-			when(Void _ = wait(src->onClosed())) {
+			when(wait(src->onClosed())) {
 				fprintf(stderr, "\n%s: connection closed\n", label.c_str());
 				return Void();
 			}
@@ -288,8 +287,7 @@ ACTOR Future<Void> extProxyConnection(Reference<BufferedConnection> serverConn, 
 	fprintf(stderr, "FdbDocProxy: connected to server\n");
 	state Reference<BufferedConnection> clientConn(new BufferedConnection(conn));
 
-	Void _ =
-	    wait(extProxyHandler(serverConn, clientConn, "C -> S") || extProxyHandler(clientConn, serverConn, "S -> C"));
+	wait(extProxyHandler(serverConn, clientConn, "C -> S") || extProxyHandler(clientConn, serverConn, "S -> C"));
 	return Void();
 }
 
@@ -304,7 +302,7 @@ ACTOR void extProxy(NetworkAddress listenAddr, NetworkAddress connectAddr) {
 				Reference<BufferedConnection> bc(new BufferedConnection(conn));
 				connections.add(extProxyConnection(bc, connectAddr));
 			}
-			when(Void _ = wait(connections.getResult())) { ASSERT(false); }
+			when(wait(connections.getResult())) { ASSERT(false); }
 		}
 	} catch (Error& e) {
 		fprintf(stderr, "FdbDocProxy: fatal error: %s\n", e.what());
@@ -353,7 +351,7 @@ ACTOR Future<Void> validateStorageVersion(Reference<DocumentLayer> docLayer) {
 			_exit(FDB_EXIT_ERROR);
 		}
 		tr->set(versionKey, DataValue(STORAGE_VERSION).encode_value());
-		Void _ = wait(tr->commit());
+		wait(tr->commit());
 	}
 	return Void();
 }
@@ -390,7 +388,7 @@ ACTOR static void runUnitTests(StringRef testPattern) {
 		state double start_timer = timer();
 
 		try {
-			Void _ = wait(test->func());
+			wait(test->func());
 		} catch (Error& e) {
 			++testsFailed;
 			result = e;
@@ -488,7 +486,7 @@ ACTOR void setup(NetworkAddress na,
 						TraceEvent("ClusterConnected");
 						break;
 					}
-					when(Void _ = wait(t)) {
+					when(wait(t)) {
 						TraceEvent(SevError, "StartupFailure")
 						    .detail("phase", "ConnectToCluster")
 						    .detail("timeout", soFar);
@@ -496,7 +494,7 @@ ACTOR void setup(NetworkAddress na,
 				}
 			} catch (Error& e) {
 				try {
-					Void _ = wait(tr2->onError(e));
+					wait(tr2->onError(e));
 				} catch (Error& e) {
 					fprintf(stderr, "Failed to connect to FDB connection! Error: %s\n", e.what());
 					_exit(FDB_EXIT_ERROR);
@@ -508,7 +506,7 @@ ACTOR void setup(NetworkAddress na,
 			Reference<DirectoryLayer> d = ref(new DirectoryLayer());
 			state Reference<DirectorySubspace> rootDir =
 			    wait(d->createOrOpen(tr2, {StringRef(rootDirectory)}, LiteralStringRef("document")));
-			Void _ = wait(tr2->commit());
+			wait(tr2->commit());
 			docLayer = Reference<DocumentLayer>(new DocumentLayer(options, db, rootDir));
 		} catch (Error& e) {
 			try {
@@ -517,7 +515,7 @@ ACTOR void setup(NetworkAddress na,
 				Reference<DirectoryLayer> d = ref(new DirectoryLayer());
 				state Reference<DirectorySubspace> rootDir2 =
 				    wait(d->createOrOpen(tr, {StringRef(rootDirectory)}, LiteralStringRef("document")));
-				Void _ = wait(tr->commit());
+				wait(tr->commit());
 				docLayer = Reference<DocumentLayer>(new DocumentLayer(options, db, rootDir2));
 			} catch (Error& e) {
 				fprintf(stderr, "Failed to create of open directory! Error: %s\n", e.what());
@@ -526,11 +524,11 @@ ACTOR void setup(NetworkAddress na,
 		}
 
 		try {
-			Void _ = wait(validateStorageVersion(docLayer));
+			wait(validateStorageVersion(docLayer));
 		} catch (Error& e) {
 			// try again in case we raced with another instance
 			try {
-				Void _ = wait(validateStorageVersion(docLayer));
+				wait(validateStorageVersion(docLayer));
 			} catch (Error& e) {
 				fprintf(stderr, "Failed to validate storage version! Error: %s\n", e.what());
 				_exit(FDB_EXIT_ERROR);
