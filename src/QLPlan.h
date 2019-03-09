@@ -347,7 +347,7 @@ struct NonIsolatedPlan : ConcretePlan<NonIsolatedPlan> {
 	NonIsolatedPlan(Reference<Plan> subPlan,
 	                bool isReadOnly,
 	                Reference<UnboundCollectionContext> cx,
-	                Reference<FDB::DatabaseContext> database,
+	                Reference<FDB::Database> database,
 	                Reference<MetadataManager> mm)
 	    : subPlan(subPlan), isReadOnly(isReadOnly), cx(cx), database(database), mm(mm) {}
 
@@ -365,11 +365,11 @@ struct NonIsolatedPlan : ConcretePlan<NonIsolatedPlan> {
 	bool hasScanOfType(PlanType type) override { return subPlan->hasScanOfType(type); }
 
 	Reference<DocTransaction> newTransaction();
-	static Reference<DocTransaction> newTransaction(Reference<FDB::DatabaseContext> database);
+	static Reference<DocTransaction> newTransaction(Reference<FDB::Database> database);
 
 private:
 	Reference<UnboundCollectionContext> cx;
-	Reference<FDB::DatabaseContext> database;
+	Reference<FDB::Database> database;
 };
 
 /**
@@ -381,7 +381,7 @@ struct RetryPlan : ConcretePlan<RetryPlan> {
 	int64_t timeout;
 	int64_t retryLimit;
 
-	RetryPlan(Reference<Plan> subPlan, int64_t timeout, int64_t retryLimit, Reference<FDB::DatabaseContext> database)
+	RetryPlan(Reference<Plan> subPlan, int64_t timeout, int64_t retryLimit, Reference<FDB::Database> database)
 	    : subPlan(subPlan), timeout(timeout), retryLimit(retryLimit), database(database) {}
 	bson::BSONObj describe() override {
 		return BSON(
@@ -399,7 +399,7 @@ struct RetryPlan : ConcretePlan<RetryPlan> {
 	Reference<DocTransaction> newTransaction();
 
 private:
-	Reference<FDB::DatabaseContext> database;
+	Reference<FDB::Database> database;
 };
 
 struct ProjectionPlan : ConcretePlan<ProjectionPlan> {
@@ -515,7 +515,7 @@ struct FindAndModifyPlan : ConcretePlan<FindAndModifyPlan> {
 	Optional<bson::BSONObj> ordering;
 	bool projectNew;
 	Reference<UnboundCollectionContext> cx;
-	Reference<FDB::DatabaseContext> database;
+	Reference<FDB::Database> database;
 	Reference<MetadataManager> mm;
 
 	FindAndModifyPlan(Reference<Plan> subPlan,
@@ -525,7 +525,7 @@ struct FindAndModifyPlan : ConcretePlan<FindAndModifyPlan> {
 	                  Optional<bson::BSONObj> ordering,
 	                  bool projectNew,
 	                  Reference<UnboundCollectionContext> cx,
-	                  Reference<FDB::DatabaseContext> database,
+	                  Reference<FDB::Database> database,
 	                  Reference<MetadataManager> mm)
 	    : subPlan(subPlan),
 	      updateOp(updateOp),

@@ -319,7 +319,7 @@ THREAD_FUNC networkThread(void* api) {
 }
 
 ACTOR Future<Void> validateStorageVersion(Reference<DocumentLayer> docLayer) {
-	state Reference<Transaction> tr(new Transaction(docLayer->database));
+	state Reference<Transaction> tr = docLayer->database->createTransaction();
 	int64_t timeout = 5000;
 	tr->setOption(FDB_TR_OPTION_TIMEOUT, StringRef((uint8_t*)&(timeout), sizeof(int64_t)));
 	tr->setOption(FDB_TR_OPTION_CAUSAL_READ_RISKY);
@@ -457,13 +457,11 @@ ACTOR void setup(NetworkAddress na,
 
 	if (!proxyto.present()) {
 		state Reference<DocumentLayer> docLayer;
-		state Reference<DatabaseContext> db;
+		state Reference<Database> db;
 		try {
-			auto cluster = fdb->createCluster(clusterFile);
-			Reference<DatabaseContext> database = cluster->createDatabase();
-			db = database;
+			db = fdb->createDatabase(clusterFile);
 			try {
-				state Reference<Transaction> tr3(new Transaction(db));
+				state Reference<Transaction> tr3 = db->createTransaction();
 				Optional<FDB::FDBStandalone<StringRef>> clusterFilePath =
 				    wait(tr3->get(LiteralStringRef("\xff\xff/cluster_file_path")));
 				TraceEvent("StartupConfig").detail("clusterfile", clusterFilePath.get().toString());
@@ -476,7 +474,7 @@ ACTOR void setup(NetworkAddress na,
 			_exit(FDB_EXIT_ERROR);
 		}
 
-		state Reference<Transaction> tr2(new Transaction(db));
+		state Reference<Transaction> tr2 = db->createTransaction();
 		state int soFar = 0;
 		loop {
 			soFar += 5;
@@ -513,7 +511,7 @@ ACTOR void setup(NetworkAddress na,
 		} catch (Error& e) {
 			try {
 				// try once more in case we raced with another instance on startup
-				state Reference<Transaction> tr(new Transaction(db));
+				state Reference<Transaction> tr = db->createTransaction();
 				Reference<DirectoryLayer> d = ref(new DirectoryLayer());
 				state Reference<DirectorySubspace> rootDir2 =
 				    wait(d->createOrOpen(tr, {StringRef(rootDirectory)}, LiteralStringRef("document")));
@@ -916,7 +914,7 @@ int main(int argc, char** argv) {
 
 	init_document_error();
 
-	g_network = newNet2(NetworkAddress(), false);
+	g_network = newNet2(false);
 #ifndef TLS_DISABLED
 	try {
 		if (tlsCertPath.size())

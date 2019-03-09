@@ -865,7 +865,7 @@ ACTOR static Future<Reference<ExtMsgReply>> doBeginActor(Reference<ExtConnection
 	ec->lastWrite = WriteResult();
 	ec->trError = Void();
 	if (!retry)
-		ec->tr = DocTransaction::create(Reference<Transaction>(new Transaction(ec->docLayer->database)));
+		ec->tr = DocTransaction::create(ec->docLayer->database->createTransaction());
 	ec->tr->tr->setOption(FDB_TR_OPTION_CAUSAL_READ_RISKY);
 	ec->tr->tr->setOption(FDB_TR_OPTION_TIMEOUT, StringRef((uint8_t*)&(ec->options.timeoutMillies), sizeof(int64_t)));
 	ec->tr->tr->setOption(FDB_TR_OPTION_RETRY_LIMIT, StringRef((uint8_t*)&(ec->options.retryLimit), sizeof(int64_t)));
