@@ -97,9 +97,9 @@ void insertElementRecursive(int fn, bson::BSONObj const& obj, Reference<IReadWri
 void insertElementRecursive(int fn, bson::BSONArray const& arr, Reference<IReadWriteContext> cx);
 
 ACTOR Future<Void> ensureValidObject(Reference<IReadWriteContext> cx,
-                               std::string objectRoot,
-                               std::string objectSubfield,
-                               bool createRoot);
+                                     std::string objectRoot,
+                                     std::string objectSubfield,
+                                     bool createRoot);
 
 /**
  * Returns the length if it is an array, -1 if a non-array value, and -2 if the field is not set

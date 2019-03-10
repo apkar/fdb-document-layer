@@ -213,7 +213,8 @@ ACTOR Future<Void> extServerConnection(Reference<DocumentLayer> docLayer,
 					   for everything at and below processRequest to assume that
 					   body - header == sizeof(ExtMsgHeader) */
 					ec->updateMaxReceivedRequestID(header->requestID);
-					wait(processRequest(ec, (ExtMsgHeader*)messageBytes.begin(), messageBytes.begin() + sizeof(ExtMsgHeader), finished));
+					wait(processRequest(ec, (ExtMsgHeader*)messageBytes.begin(),
+					                    messageBytes.begin() + sizeof(ExtMsgHeader), finished));
 
 					ec->bc->advance(header->messageLength);
 					msg_size_inuse.send(std::make_pair(header->messageLength, finished.getFuture()));
@@ -266,8 +267,8 @@ ACTOR Future<Void> extProxyHandler(Reference<BufferedConnection> src,
 
 				Promise<Void> finished;
 
-				Reference<ExtMsg> msg =
-				    ExtMsg::create((ExtMsgHeader*)messageBytes.begin(), messageBytes.begin() + sizeof(ExtMsgHeader), finished);
+				Reference<ExtMsg> msg = ExtMsg::create((ExtMsgHeader*)messageBytes.begin(),
+				                                       messageBytes.begin() + sizeof(ExtMsgHeader), finished);
 				fprintf(stderr, "\n%s: %s\n", label.c_str(), msg->toString().c_str());
 
 				dest->write(messageBytes);
@@ -534,7 +535,7 @@ ACTOR void setup(NetworkAddress na,
 				_exit(FDB_EXIT_ERROR);
 			}
 		}
-//		statusUpdateActor(FDB_DOC_VT_PACKAGE_NAME, toIPString(na.ip), na.port, docLayer, timer() * 1000);
+		//		statusUpdateActor(FDB_DOC_VT_PACKAGE_NAME, toIPString(na.ip), na.port, docLayer, timer() * 1000);
 		extServer(docLayer, na);
 
 		if (!unitTestPattern.empty())

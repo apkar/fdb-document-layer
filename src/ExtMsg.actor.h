@@ -230,20 +230,20 @@ static const char* indexes_collection = "system.indexes";
 Reference<Plan> planQuery(Reference<UnboundCollectionContext> cx, const bson::BSONObj& query);
 std::vector<std::string> staticValidateUpdateObject(bson::BSONObj update, bool multi, bool upsert);
 ACTOR Future<WriteCmdResult> attemptIndexInsertion(bson::BSONObj firstDoc,
-                                             Reference<ExtConnection> ec,
-                                             Reference<DocTransaction> tr,
-                                             Namespace ns);
+                                                   Reference<ExtConnection> ec,
+                                                   Reference<DocTransaction> tr,
+                                                   Namespace ns);
 ACTOR Future<WriteCmdResult> doInsertCmd(Namespace ns,
-                                   std::list<bson::BSONObj>* documents,
-                                   Reference<ExtConnection> ec);
+                                         std::list<bson::BSONObj>* documents,
+                                         Reference<ExtConnection> ec);
 ACTOR Future<WriteCmdResult> doDeleteCmd(Namespace ns,
-                                   bool ordered,
-                                   std::vector<bson::BSONObj>* selectors,
-                                   Reference<ExtConnection> ec);
+                                         bool ordered,
+                                         std::vector<bson::BSONObj>* selectors,
+                                         Reference<ExtConnection> ec);
 ACTOR Future<WriteCmdResult> doUpdateCmd(Namespace ns,
-                                   bool ordered,
-                                   std::vector<ExtUpdateCmd>* updateCmds,
-                                   Reference<ExtConnection> ec);
+                                         bool ordered,
+                                         std::vector<ExtUpdateCmd>* updateCmds,
+                                         Reference<ExtConnection> ec);
 
 // FIXME: these don't really belong here either
 Reference<IUpdateOp> operatorUpdate(bson::BSONObj const& msgUpdate);

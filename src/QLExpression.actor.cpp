@@ -56,12 +56,12 @@ ACTOR Future<Optional<std::pair<Standalone<StringRef>, DataValue>>> getArrayAnce
 }
 
 ACTOR static Future<Void> doPathExpansion(PromiseStream<Reference<IReadContext>> promises,
-                                    Standalone<StringRef> queryPath,
-                                    Reference<IReadContext> document,
-                                    int arrayLookStart,
-                                    bool isOuter,
-                                    bool expandLastArray,
-                                    bool imputeNulls);
+                                          Standalone<StringRef> queryPath,
+                                          Reference<IReadContext> document,
+                                          int arrayLookStart,
+                                          bool isOuter,
+                                          bool expandLastArray,
+                                          bool imputeNulls);
 
 ACTOR static Future<Void> doPathExpansionIfNotArray(PromiseStream<Reference<IReadContext>> promises,
                                                     Standalone<StringRef> queryPath,

@@ -20,8 +20,8 @@
  * MongoDB is a registered trademark of MongoDB, Inc.
  */
 
-#include "Ext.h"
 #include "ExtMsg.actor.h"
+#include "Ext.h"
 
 #include "Cursor.h"
 #include "ExtCmd.h"
