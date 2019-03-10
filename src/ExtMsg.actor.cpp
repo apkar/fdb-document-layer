@@ -21,7 +21,7 @@
  */
 
 #include "Ext.h"
-#include "ExtMsg.h"
+#include "ExtMsg.actor.h"
 
 #include "Cursor.h"
 #include "ExtCmd.h"

@@ -255,7 +255,7 @@ ACTOR static Future<Void> buildIndex_impl(bson::BSONObj indexObj,
 
 		state Reference<Plan> finalizePlan = ec->isolatedWrapOperationPlan(
 		    ref(new UpdateIndexStatusPlan(ns, encodedIndexId, ec->mm, std::string("ready"), info.buildId)), 0, -1);
-		int64_t _ = wait(executeUntilCompletionTransactionally(finalizePlan, ec->getOperationTransaction()));
+		int64_t __ = wait(executeUntilCompletionTransactionally(finalizePlan, ec->getOperationTransaction()));
 
 		return Void();
 	} catch (Error& e) {

@@ -7,7 +7,6 @@ add_executable(fdbdoc
         error_definitions.h
         Ext.h
         ExtCmd.h
-        ExtMsg.h
         ExtOperator.h
         ExtStructs.h
         FPUUtils.h
@@ -45,6 +44,7 @@ set(ACTOR_FILES
         QLPredicate.actor.cpp
         QLProjection.actor.cpp
         StatusService.actor.cpp
+        ExtMsg.actor.h
         ExtUtil.actor.h
         )
 

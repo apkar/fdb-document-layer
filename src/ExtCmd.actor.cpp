@@ -24,7 +24,7 @@
 #include "ordering.h"
 
 #include "ExtCmd.h"
-#include "ExtMsg.h"
+#include "ExtMsg.actor.h"
 #include "ExtUtil.actor.h"
 
 #include "QLPlan.h"

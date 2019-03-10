@@ -96,15 +96,15 @@ void insertElementRecursive(int fn, bson::BSONElement const& elem, Reference<IRe
 void insertElementRecursive(int fn, bson::BSONObj const& obj, Reference<IReadWriteContext> cx);
 void insertElementRecursive(int fn, bson::BSONArray const& arr, Reference<IReadWriteContext> cx);
 
-Future<Void> ensureValidObject(const Reference<IReadWriteContext>& cx,
-                               const std::string& objectRoot,
-                               const std::string& objectSubfield,
-                               const bool& createRoot);
+ACTOR Future<Void> ensureValidObject(Reference<IReadWriteContext> cx,
+                               std::string objectRoot,
+                               std::string objectSubfield,
+                               bool createRoot);
 
 /**
  * Returns the length if it is an array, -1 if a non-array value, and -2 if the field is not set
  */
-Future<int> isArray(const Reference<IReadWriteContext>& docCx, const std::string& arrayRoot);
+ACTOR Future<int> isArray(Reference<IReadWriteContext> docCx, std::string arrayRoot);
 
 /**
  * Places the "top-level" elements of the array stored in `document` under `arrayField` into `p`.

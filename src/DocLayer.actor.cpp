@@ -37,7 +37,7 @@
 #include "ConsoleMetric.h"
 #include "Cursor.h"
 #include "DocLayer.h"
-#include "ExtMsg.h"
+#include "ExtMsg.actor.h"
 #include "IMetric.h"
 #include "StatusService.h"
 

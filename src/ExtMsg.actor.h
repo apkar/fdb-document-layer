@@ -18,8 +18,13 @@
  * limitations under the License.
  */
 
-#ifndef _EXT_MSG_H_
-#define _EXT_MSG_H_
+// When actually compiled (NO_INTELLISENSE), include the generated version of this file.  In intellisense use the source
+// version.
+#if defined(NO_INTELLISENSE) && !defined(_EXT_MSG_ACTOR_G_H_)
+#define _EXT_MSG_ACTOR_G_H_
+#include "ExtMsg.actor.g.h"
+#elif !defined(_EXT_MSG_ACTOR_H_)
+#define _EXT_MSG_ACTOR_H_
 
 #pragma once
 
@@ -36,6 +41,8 @@
 
 #include "QLPlan.h"
 #include "QLPredicate.h"
+
+#include "flow/actorcompiler.h" // This must be the last #include.
 
 struct ExtMsg : IDispatched<ExtMsg, int32_t, std::function<ExtMsg*(ExtMsgHeader*, const uint8_t*)>>,
                 ReferenceCounted<ExtMsg> {
@@ -222,21 +229,21 @@ static const char* indexes_collection = "system.indexes";
 
 Reference<Plan> planQuery(Reference<UnboundCollectionContext> cx, const bson::BSONObj& query);
 std::vector<std::string> staticValidateUpdateObject(bson::BSONObj update, bool multi, bool upsert);
-Future<WriteCmdResult> attemptIndexInsertion(bson::BSONObj const& firstDoc,
-                                             Reference<ExtConnection> const& ec,
-                                             Reference<DocTransaction> const& tr,
-                                             Namespace const& ns);
-Future<WriteCmdResult> doInsertCmd(Namespace const& ns,
-                                   std::list<bson::BSONObj>* const& documents,
-                                   Reference<ExtConnection> const& ec);
-Future<WriteCmdResult> doDeleteCmd(Namespace const& ns,
-                                   bool const& ordered,
-                                   std::vector<bson::BSONObj>* const& selectors,
-                                   Reference<ExtConnection> const& ec);
-Future<WriteCmdResult> doUpdateCmd(Namespace const& ns,
-                                   bool const& ordered,
-                                   std::vector<ExtUpdateCmd>* const& updateCmds,
-                                   Reference<ExtConnection> const& ec);
+ACTOR Future<WriteCmdResult> attemptIndexInsertion(bson::BSONObj firstDoc,
+                                             Reference<ExtConnection> ec,
+                                             Reference<DocTransaction> tr,
+                                             Namespace ns);
+ACTOR Future<WriteCmdResult> doInsertCmd(Namespace ns,
+                                   std::list<bson::BSONObj>* documents,
+                                   Reference<ExtConnection> ec);
+ACTOR Future<WriteCmdResult> doDeleteCmd(Namespace ns,
+                                   bool ordered,
+                                   std::vector<bson::BSONObj>* selectors,
+                                   Reference<ExtConnection> ec);
+ACTOR Future<WriteCmdResult> doUpdateCmd(Namespace ns,
+                                   bool ordered,
+                                   std::vector<ExtUpdateCmd>* updateCmds,
+                                   Reference<ExtConnection> ec);
 
 // FIXME: these don't really belong here either
 Reference<IUpdateOp> operatorUpdate(bson::BSONObj const& msgUpdate);
@@ -244,4 +251,5 @@ Reference<IUpdateOp> replaceUpdate(bson::BSONObj const& replaceWith);
 Reference<IInsertOp> simpleUpsert(bson::BSONObj const& selector, bson::BSONObj const& update);
 Reference<IInsertOp> operatorUpsert(bson::BSONObj const& selector, bson::BSONObj const& update);
 
-#endif /* _EXT_MSG_H_ */
+#include "flow/unactorcompiler.h"
+#endif /* _EXT_MSG_ACTOR_H_ */

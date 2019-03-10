@@ -65,10 +65,7 @@ struct DocumentDeferred : ReferenceCounted<DocumentDeferred> {
 	std::set<struct ITDoc*> dirty;
 	std::vector<std::function<Future<Void>(Reference<struct DocTransaction>)>> deferred;
 
-	Future<Void> commitChanges(Reference<DocTransaction> tr) {
-		return commitChanges(tr, Reference<DocumentDeferred>::addRef(this));
-	}
-	static Future<Void> commitChanges(Reference<DocTransaction> const& tr, Reference<DocumentDeferred> const& self);
+	Future<Void> commitChanges(Reference<DocTransaction> tr);
 };
 
 struct DocTransaction : ReferenceCounted<DocTransaction> {
@@ -80,10 +77,7 @@ struct DocTransaction : ReferenceCounted<DocTransaction> {
 		return Reference<DocTransaction>(new DocTransaction(tr));
 	}
 
-	Future<Void> commitChanges(std::string const& docPrefix) {
-		return commitChanges(Reference<DocTransaction>::addRef(this), docPrefix);
-	}
-	static Future<Void> commitChanges(Reference<DocTransaction> const& self, std::string const& docPrefix);
+	Future<Void> commitChanges(std::string const& docPrefix);
 
 	// If you are about to call this function, think very carefully about why you are doing that. It is not safe to call
 	// in general. Look at the comments in doNonIsolatedRW() for more on what it's for.
