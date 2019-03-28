@@ -24,6 +24,8 @@
 #include <cstdint>
 #include <string>
 
+#include "flow/Arena.h"
+
 namespace DocLayerConstants {
 
 // On a par with MongoDB limits
@@ -73,6 +75,8 @@ extern const char* INDEX_STATUS_READY;
 extern const char* INDEX_STATUS_BUILDING;
 extern const char* INDEX_STATUS_ERROR;
 
+// LiteralStringRef
+extern const StringRef LONG_ONE_BYTES_BE;
 } // namespace DocLayerConstants
 
 #endif // FDB_DOC_LAYER_CONSTANTS_H

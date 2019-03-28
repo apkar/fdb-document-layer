@@ -1417,7 +1417,7 @@ ACTOR static Future<Void> doIndexInsert(PlanCheckpoint* checkpoint,
 		}
 
 		Reference<IReadWriteContext> doc = wait(indexInsert->insert(unbound->bindCollectionContext(tr)));
-		mcx->bindCollectionContext(tr)->bumpMetadataVersion();
+		mcx->bumpMetadataVersion(tr->tr);
 		output.send(ref(new ScanReturnedContext(doc, -1, Key())));
 		throw end_of_stream();
 	} catch (Error& e) {
@@ -1561,8 +1561,7 @@ ACTOR static Future<Void> updateIndexStatus(PlanCheckpoint* checkpoint,
 		state Reference<UnboundCollectionContext> indexCollection = wait(mm->indexesCollection(tr, ns.first));
 		state Reference<QueryContext> indexDoc =
 		    indexCollection->bindCollectionContext(tr)->cx->getSubContext(encodedIndexId);
-		Reference<UnboundCollectionContext> ucx = wait(mm->getUnboundCollectionContext(tr, ns));
-		state Reference<CollectionContext> mcx = ucx->bindCollectionContext(tr);
+		state Reference<UnboundCollectionContext> ucx = wait(mm->getUnboundCollectionContext(tr, ns));
 		Optional<DataValue> dv =
 		    wait(indexDoc->get(DataValue(DocLayerConstants::BUILD_ID_FIELD, DVTypeCode::STRING).encode_key_part()));
 		if (dv.present()) {
@@ -1589,7 +1588,7 @@ ACTOR static Future<Void> updateIndexStatus(PlanCheckpoint* checkpoint,
 			indexDoc->clear(
 			    DataValue(DocLayerConstants::CURRENTLY_PROCESSING_DOC_FIELD, DVTypeCode::STRING).encode_key_part());
 			indexDoc->clear(DataValue(DocLayerConstants::BUILD_ID_FIELD, DVTypeCode::STRING).encode_key_part());
-			mcx->bumpMetadataVersion();
+			ucx->bumpMetadataVersion(tr->tr);
 			output.send(ref(new ScanReturnedContext(indexDoc, -1, Key())));
 			throw end_of_stream();
 		} else {

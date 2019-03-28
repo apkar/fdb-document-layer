@@ -399,6 +399,8 @@ struct UnboundCollectionContext : ReferenceCounted<UnboundCollectionContext>, Fa
 	std::string databaseName();
 	std::string collectionName();
 
+	void bumpMetadataVersion(Reference<Transaction> tr);
+
 	Reference<DirectorySubspace> collectionDirectory;
 	Reference<DirectorySubspace> metadataDirectory;
 
@@ -425,7 +427,6 @@ struct CollectionContext : ReferenceCounted<CollectionContext>, FastAllocated<Co
 		}
 	}
 
-	void bumpMetadataVersion();
 	Future<uint64_t> getMetadataVersion();
 
 private:

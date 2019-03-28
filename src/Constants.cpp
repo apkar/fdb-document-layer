@@ -62,4 +62,5 @@ const char* INDEX_STATUS_READY = "ready";
 const char* INDEX_STATUS_BUILDING = "building";
 const char* INDEX_STATUS_ERROR = "error";
 
+const StringRef LONG_ONE_BYTES_BE = LiteralStringRef("\x01\x00\x00\x00\x00\x00\x00\x00");
 } // namespace DocLayerConstants

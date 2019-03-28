@@ -87,7 +87,7 @@ ACTOR static Future<std::pair<int, int>> dropIndexMatching(Reference<DocTransact
 	Key indexKey = targetedCollection->getIndexesSubspace().withSuffix(StringRef(encodeMaybeDotted(matchingName)));
 	tr->tr->clear(FDB::KeyRangeRef(indexKey, strinc(indexKey)));
 
-	targetedCollection->bindCollectionContext(tr)->bumpMetadataVersion();
+	targetedCollection->bumpMetadataVersion(tr->tr);
 
 	return std::make_pair(count, 1);
 }
@@ -355,7 +355,7 @@ ACTOR static Future<int> internal_doDropIndexesActor(Reference<DocTransaction> t
 
 	Key indexes = unbound->getIndexesSubspace();
 	tr->tr->clear(FDB::KeyRangeRef(indexes, strinc(indexes)));
-	unbound->bindCollectionContext(tr)->bumpMetadataVersion();
+	unbound->bumpMetadataVersion(tr->tr);
 
 	return count;
 }

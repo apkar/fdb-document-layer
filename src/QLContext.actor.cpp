@@ -752,9 +752,8 @@ std::string UnboundCollectionContext::collectionName() {
 	return collectionDirectory->getPath().back().toString();
 }
 
-void CollectionContext::bumpMetadataVersion() {
-	cx->getTransaction()->tr->atomicOp(unbound->getVersionKey(), LiteralStringRef("\x01\x00\x00\x00\x00\x00\x00\x00"),
-	                                   FDB_MUTATION_TYPE_ADD);
+void UnboundCollectionContext::bumpMetadataVersion(Reference<Transaction> tr) {
+	tr->atomicOp(this->getVersionKey(), DocLayerConstants::LONG_ONE_BYTES_BE, FDB_MUTATION_TYPE_ADD);
 }
 
 Future<uint64_t> CollectionContext::getMetadataVersion() {

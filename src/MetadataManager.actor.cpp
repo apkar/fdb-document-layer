@@ -25,10 +25,10 @@
 
 using namespace FDB;
 
-Future<uint64_t> getMetadataVersion(Reference<DocTransaction> tr, Reference<DirectorySubspace> metadataDirectory) {
+Future<uint64_t> getMetadataVersion(Reference<Transaction> tr, Reference<DirectorySubspace> metadataDirectory) {
 	std::string versionKey = metadataDirectory->key().toString() +
 	                         DataValue(DocLayerConstants::VERSION_KEY, DVTypeCode::STRING).encode_key_part();
-	Future<Optional<FDBStandalone<StringRef>>> fov = tr->tr->get(StringRef(versionKey));
+	Future<Optional<FDBStandalone<StringRef>>> fov = tr->get(StringRef(versionKey));
 	Future<uint64_t> ret = map(fov, [](Optional<FDBStandalone<StringRef>> ov) -> uint64_t {
 		if (!ov.present())
 			return 0;
@@ -102,7 +102,7 @@ ACTOR static Future<std::pair<Reference<UnboundCollectionContext>, uint64_t>> co
 		state Reference<DirectorySubspace> metadataDirectory = wait(docLayer->rootDirectory->open(
 		    snapshotTr, {StringRef(ns.first), StringRef(ns.second), StringRef(DocLayerConstants::METADATA)}));
 
-		state Future<uint64_t> fv = getMetadataVersion(tr, metadataDirectory);
+		state Future<uint64_t> fv = getMetadataVersion(tr->tr, metadataDirectory);
 		state Reference<DirectorySubspace> collectionDirectory = wait(fcollectionDirectory);
 		state Reference<DirectorySubspace> indexDirectory = wait(findexDirectory);
 		state Reference<UnboundCollectionContext> cx =
@@ -156,7 +156,7 @@ ACTOR static Future<std::pair<Reference<UnboundCollectionContext>, uint64_t>> co
 		// fprintf(stderr, "%s.%s Creating: Collection dir: %s Metadata dir:%s Caller:%s\n", dbName.c_str(),
 		// collectionName.c_str(), printable(tcollectionDirectory->key()).c_str(),
 		// printable(tmetadataDirectory->key()).c_str(), "");
-		tcx->bindCollectionContext(tr)->bumpMetadataVersion(); // We start at version 1.
+		tcx->bumpMetadataVersion(tr->tr); // We start at version 1.
 
 		return std::make_pair(tcx, -1); // So we don't pollute the cache in case this transaction never commits
 	}
@@ -191,7 +191,7 @@ ACTOR static Future<Reference<UnboundCollectionContext>> assembleCollectionConte
 	} else {
 		state uint64_t oldVersion = (*match).second.second;
 		state Reference<UnboundCollectionContext> oldUnbound = (*match).second.first;
-		uint64_t version = wait(getMetadataVersion(tr, oldUnbound->metadataDirectory));
+		uint64_t version = wait(getMetadataVersion(tr->tr, oldUnbound->metadataDirectory));
 		if (version != oldVersion) {
 			std::pair<Reference<UnboundCollectionContext>, uint64_t> unboundPair =
 			    wait(constructContext(ns, tr, self->docLayer, includeIndex, createCollectionIfAbsent));
