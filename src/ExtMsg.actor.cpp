@@ -749,10 +749,13 @@ struct ExtIndexInsert : ConcreteInsertOp<ExtIndexInsert> {
 	Future<Reference<IReadWriteContext>> insert(Reference<CollectionContext> cx) { return indexInsertActor(this, cx); }
 };
 
-ACTOR Future<WriteCmdResult> attemptIndexInsertion(bson::BSONObj indexObj,
-                                                   Reference<ExtConnection> ec,
-                                                   Reference<DocTransaction> tr,
-                                                   Namespace ns) {
+ACTOR Future<WriteCmdResult> attemptIndexInsertion(bson::BSONObj indexObj, Reference<ExtConnection> ec, Namespace ns) {
+	if (ec->explicitTransaction) {
+		throw invalid_operation_in_transaction();
+	}
+
+	Reference<DocTransaction> tr = ec->getOperationTransaction();
+
 	if (!indexObj.hasField(DocLayerConstants::NAME_FIELD))
 		throw no_index_name();
 
@@ -840,8 +843,6 @@ ACTOR Future<WriteCmdResult> attemptIndexInsertion(bson::BSONObj indexObj,
 ACTOR Future<WriteCmdResult> doInsertCmd(Namespace ns,
                                          std::list<bson::BSONObj>* documents,
                                          Reference<ExtConnection> ec) {
-	state Reference<DocTransaction> tr = ec->getOperationTransaction();
-
 	if (ns.second == DocLayerConstants::SYSTEM_INDEXES) {
 		if (verboseLogging)
 			TraceEvent("BD_doInsertRun").detail("AttemptIndexInsertion", "");
@@ -852,9 +853,11 @@ ACTOR Future<WriteCmdResult> doInsertCmd(Namespace ns,
 
 		const char* collnsStr = firstDoc.getField(DocLayerConstants::NS_FIELD).String().c_str();
 		const auto collns = getDBCollectionPair(collnsStr, std::make_pair("msg", "Bad coll name in index insert"));
-		WriteCmdResult result = wait(attemptIndexInsertion(firstDoc.getOwned(), ec, tr, collns));
+		WriteCmdResult result = wait(attemptIndexInsertion(firstDoc.getOwned(), ec, collns));
 		return result;
 	}
+
+	state Reference<DocTransaction> tr = ec->getOperationTransaction();
 
 	std::vector<Reference<IInsertOp>> inserts;
 	std::set<std::string> ids;

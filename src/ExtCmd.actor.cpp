@@ -689,7 +689,7 @@ ACTOR static Future<Reference<ExtMsgReply>> doCreateIndexes(Reference<ExtConnect
 	std::vector<bson::BSONElement> arr = query->query.getField("indexes").Array();
 	for (auto el : arr) {
 		bson::BSONObj indexDoc = el.Obj();
-		f.push_back(attemptIndexInsertion(indexDoc, ec, ec->getOperationTransaction(), query->ns));
+		f.push_back(attemptIndexInsertion(indexDoc, ec, query->ns));
 	}
 	try {
 		Void _ = wait(waitForAll(f));
@@ -834,7 +834,7 @@ ACTOR static Future<Reference<ExtMsgReply>> doCreateCollection(Reference<ExtConn
 		}
 
 		if (ec->explicitTransaction) {
-			Void _ = wait(Internal_doCreateCollection(ec->tr, query, ec->mm));
+			throw invalid_operation_in_transaction();
 		} else {
 			Void _ = wait(runRYWTransaction(
 			    ec->docLayer->database,

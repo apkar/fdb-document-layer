@@ -220,7 +220,6 @@ Reference<Plan> planQuery(Reference<UnboundCollectionContext> cx, const bson::BS
 std::vector<std::string> staticValidateUpdateObject(bson::BSONObj update, bool multi, bool upsert);
 Future<WriteCmdResult> attemptIndexInsertion(bson::BSONObj const& firstDoc,
                                              Reference<ExtConnection> const& ec,
-                                             Reference<DocTransaction> const& tr,
                                              Namespace const& ns);
 Future<WriteCmdResult> doInsertCmd(Namespace const& ns,
                                    std::list<bson::BSONObj>* const& documents,

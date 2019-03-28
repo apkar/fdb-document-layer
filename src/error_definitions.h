@@ -83,6 +83,7 @@ DOCLAYER_ERROR(update_operator_empty_parameter,
 
 DOCLAYER_ERROR(wire_protocol_mismatch, 29966, "Wire protocol mismatch. Bad message received.");
 DOCLAYER_ERROR(no_index_name, 29967, "No index name specified");
+DOCLAYER_ERROR(invalid_operation_in_transaction, 29968, "Schema changes are not allowed in explicit transaction")
 DOCLAYER_ERROR(unsupported_index_type, 29969, "Document Layer does not support this index type, yet.");
 
 DOCLAYER_ERROR(collection_not_found, 29979, "Collection not found.");
