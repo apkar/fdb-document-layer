@@ -82,6 +82,52 @@ IndexInfo MetadataManager::indexInfoFromObj(const bson::BSONObj& indexObj, Refer
 	}
 }
 
+/**
+ * Create required directories in directory layer for the new database. Caller should make sure database doesn't
+ * exist already.
+ *
+ * NOTE: Its not safe to create directories in parallel in one transaction. This actor creates one after another.
+ */
+// ACTOR static Future<Void> createDatabaseContext(Reference<Transaction> tr,
+//                                                std::string dbName,
+//                                                Reference<DirectorySubspace> rootDir) {
+//	Void _ = wait(success(rootDir->create(tr, {StringRef(dbName)})));
+//	Void _ = wait(success(rootDir->create(tr, {StringRef(dbName), StringRef(DocLayerConstants::SYSTEM_INDEXES)})));
+//	// There is no need for metadata directory for index namespace. Just creating it for now, to keep other bits of the
+//	// code happy. Ideally, we keep indexes directly as Tuples in higher level keyspace and get-rid of all this special
+//	// handling. But, thats for another day as that needs change of on-disk format.
+//	Void _ = wait(success(rootDir->create(tr, {StringRef(dbName), StringRef(DocLayerConstants::SYSTEM_INDEXES),
+//	                                           StringRef(DocLayerConstants::METADATA)})));
+//	return Void();
+//}
+
+/**
+ * Create required directories in directory layer for the new collection. Caller should make sure collection doesn't
+ * exist already.
+ *
+ * NOTE: Its not safe to create directories in parallel in one transaction. This actor creates one after another.
+ */
+ACTOR static Future<Reference<UnboundCollectionContext>>
+createNewCollectionContext(Reference<Transaction> tr, Namespace ns, Reference<DirectorySubspace> rootDir) {
+	//	bool dbExists = wait(rootDir->exists(tr, {StringRef(ns.first)}));
+	//	if (!dbExists)
+	//		Void _ = wait(createDatabaseContext(tr, ns.first, rootDir));
+	//
+	//	ASSERT(ns.second != DocLayerConstants::SYSTEM_INDEXES)
+
+	state Reference<DirectorySubspace> collDir =
+	    wait(rootDir->createOrOpen(tr, {StringRef(ns.first), StringRef(ns.second)}));
+	state Reference<DirectorySubspace> metaDir = wait(
+	    rootDir->createOrOpen(tr, {StringRef(ns.first), StringRef(ns.second), StringRef(DocLayerConstants::METADATA)}));
+
+	auto ucx = Reference<UnboundCollectionContext>(new UnboundCollectionContext(collDir, metaDir));
+
+	// Bump metadata version, so we can start at version 1.
+	ucx->bumpMetadataVersion(tr);
+
+	return ucx;
+}
+
 ACTOR static Future<std::pair<Reference<UnboundCollectionContext>, uint64_t>> constructContext(
     Namespace ns,
     Reference<DocTransaction> tr,
@@ -125,9 +171,6 @@ ACTOR static Future<std::pair<Reference<UnboundCollectionContext>, uint64_t>> co
 			}
 		}
 
-		// fprintf(stderr, "%s.%s Reading: Collection dir: %s Metadata dir:%s Caller:%s\n", dbName.c_str(),
-		// collectionName.c_str(), printable(collectionDirectory->key()).c_str(),
-		// printable(metadataDirectory->key()).c_str(), "");
 		uint64_t version = wait(fv);
 		return std::make_pair(cx, version);
 	} catch (Error& e) {
@@ -143,22 +186,9 @@ ACTOR static Future<std::pair<Reference<UnboundCollectionContext>, uint64_t>> co
 		if (!createCollectionIfAbsent)
 			throw collection_not_found();
 
-		// NB: These directory creations are not parallelized deliberately, because it is unsafe to create directories
-		// in parallel with the same transaction in the Flow directory layer.
-		state Reference<DirectorySubspace> tcollectionDirectory =
-		    wait(docLayer->rootDirectory->createOrOpen(tr->tr, {StringRef(ns.first), StringRef(ns.second)}));
-		state Reference<DirectorySubspace> tindexDirectory = wait(docLayer->rootDirectory->createOrOpen(
-		    tr->tr, {StringRef(ns.first), StringRef(DocLayerConstants::SYSTEM_INDEXES)}));
-		state Reference<DirectorySubspace> tmetadataDirectory = wait(docLayer->rootDirectory->createOrOpen(
-		    tr->tr, {StringRef(ns.first), StringRef(ns.second), StringRef(DocLayerConstants::METADATA)}));
-		state Reference<UnboundCollectionContext> tcx =
-		    Reference<UnboundCollectionContext>(new UnboundCollectionContext(tcollectionDirectory, tmetadataDirectory));
-		// fprintf(stderr, "%s.%s Creating: Collection dir: %s Metadata dir:%s Caller:%s\n", dbName.c_str(),
-		// collectionName.c_str(), printable(tcollectionDirectory->key()).c_str(),
-		// printable(tmetadataDirectory->key()).c_str(), "");
-		tcx->bumpMetadataVersion(tr->tr); // We start at version 1.
+		Reference<UnboundCollectionContext> ucx = wait(createNewCollectionContext(tr->tr, ns, docLayer->rootDirectory));
 
-		return std::make_pair(tcx, -1); // So we don't pollute the cache in case this transaction never commits
+		return std::make_pair(ucx, -1); // So we don't pollute the cache in case this transaction never commits
 	}
 }
 

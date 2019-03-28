@@ -45,8 +45,7 @@ struct MetadataManager : ReferenceCounted<MetadataManager>, NonCopyable {
 
 	Future<Reference<UnboundCollectionContext>> indexesCollection(Reference<DocTransaction> tr,
 	                                                              std::string const& dbName) {
-		return getUnboundCollectionContext(tr, std::make_pair(dbName, std::string(DocLayerConstants::SYSTEM_INDEXES)),
-		                                   true);
+		return getUnboundCollectionContext(tr, std::make_pair(dbName, DocLayerConstants::SYSTEM_INDEXES), true);
 	}
 
 	static Future<Void> buildIndex(bson::BSONObj indexObj,
