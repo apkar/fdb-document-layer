@@ -40,6 +40,10 @@ struct MetadataManager : ReferenceCounted<MetadataManager>, NonCopyable {
 	                                                                        bool allowSystemNamespace = false,
 	                                                                        bool includeIndex = true,
 	                                                                        bool createCollectionIfAbsent = true);
+	Future<Optional<Reference<UnboundCollectionContext>>> getUnboundCollectionContextV1(Reference<DocTransaction> tr,
+	                                                                        Namespace const& ns,
+	                                                                        bool allowSystemNamespace = false,
+	                                                                        bool includeIndex = true);
 	Future<Reference<UnboundCollectionContext>> refreshUnboundCollectionContext(Reference<UnboundCollectionContext> cx,
 	                                                                            Reference<DocTransaction> tr);
 

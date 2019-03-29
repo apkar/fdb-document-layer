@@ -363,9 +363,11 @@ ACTOR static Future<int> internal_doDropIndexesActor(Reference<DocTransaction> t
 ACTOR static Future<Void> Internal_doDropCollection(Reference<DocTransaction> tr,
                                                     Reference<ExtMsgQuery> query,
                                                     Reference<MetadataManager> mm) {
-	state Reference<UnboundCollectionContext> unbound = wait(mm->getUnboundCollectionContext(tr, query->ns));
-	int _ = wait(internal_doDropIndexesActor(tr, query->ns, mm));
-	Void _ = wait(unbound->collectionDirectory->remove(tr->tr));
+	state Optional<Reference<UnboundCollectionContext>> cxOptional = wait(mm->getUnboundCollectionContextV1(tr, query->ns));
+	if (cxOptional.present()) {
+		int _ = wait(internal_doDropIndexesActor(tr, query->ns, mm));
+		Void _ = wait(cxOptional.get()->collectionDirectory->remove(tr->tr));
+	}
 	return Void();
 }
 
@@ -409,19 +411,22 @@ ACTOR static Future<Reference<ExtMsgReply>> getStreamCount(Reference<ExtConnecti
                                                            Reference<ExtMsgReply> reply) {
 	try {
 		state Reference<DocTransaction> dtr = ec->getOperationTransaction();
-		Reference<UnboundCollectionContext> cx = wait(ec->mm->getUnboundCollectionContext(dtr, query->ns, true));
-		Reference<Plan> plan = planQuery(cx, query->query.getObjectField(DocLayerConstants::QUERY_FIELD));
-		plan = ec->wrapOperationPlan(plan, true, cx);
-
-		// fprintf(stderr, "Plan: %s\n", plan->describe().toString().c_str());
+		Optional<Reference<UnboundCollectionContext>> cxOptional = wait(ec->mm->getUnboundCollectionContextV1(dtr, query->ns, true));
+		Reference<Plan> plan;
+		if (cxOptional.present()) {
+			plan = planQuery(cxOptional.get(), query->query.getObjectField(DocLayerConstants::QUERY_FIELD));
+			plan = ec->wrapOperationPlan(plan, true, cxOptional.get());
+		} else {
+			plan = ref(new EmptyPlan());
+		}
 
 		// Rather than use a SkipPlan, we subtract "skipped" documents from the final count (and add them to any limit)
 		state int64_t skip = query->query.hasField("skip") ? query->query.getField("skip").numberLong() : 0;
 		state int64_t limitPlusSkip = query->query.hasField("limit")
 		                                  ? skip + query->query.getField("limit").numberLong()
 		                                  : std::numeric_limits<int64_t>::max();
-		int64_t count = wait(executeUntilCompletionTransactionally(
-		    plan, dtr)); // SOMEDAY: We can optimize this by only counting the first limitPlusSkip documents
+		// SOMEDAY: We can optimize this by only counting the first limitPlusSkip documents
+		int64_t count = wait(executeUntilCompletionTransactionally(plan, dtr));
 
 		reply->addDocument(BSON("n" << (double)std::max<int64_t>(count - skip, 0) << "ok" << 1.0));
 		return reply;
@@ -820,7 +825,7 @@ REGISTER_CMD(CollectionStatsCmd, "collstats");
 ACTOR static Future<Void> Internal_doCreateCollection(Reference<DocTransaction> tr,
                                                       Reference<ExtMsgQuery> query,
                                                       Reference<MetadataManager> mm) {
-	state Reference<UnboundCollectionContext> unbound = wait(mm->getUnboundCollectionContext(tr, query->ns));
+	Void _ = wait(success(mm->getUnboundCollectionContext(tr, query->ns)));
 	return Void();
 }
 
@@ -1345,16 +1350,20 @@ ACTOR static Future<Reference<ExtMsgReply>> getStreamDistinct(Reference<ExtConne
 	state int filtered = 0;
 
 	try {
-		state Reference<DocTransaction> dtr = ec->getOperationTransaction();
-		Reference<UnboundCollectionContext> cx = wait(ec->mm->getUnboundCollectionContext(dtr, query->ns, true));
-
 		if (!query->query.hasField(DocLayerConstants::KEY_FIELD)) {
 			throw wire_protocol_mismatch();
 		}
 		state std::string keyValue = query->query.getStringField(DocLayerConstants::KEY_FIELD);
 
-		Reference<Plan> qrPlan = planQuery(cx, query->query.getObjectField(DocLayerConstants::QUERY_FIELD));
-		qrPlan = ec->wrapOperationPlan(qrPlan, true, cx);
+		state Reference<DocTransaction> dtr = ec->getOperationTransaction();
+		Optional<Reference<UnboundCollectionContext>> cxOptional = wait(ec->mm->getUnboundCollectionContextV1(dtr, query->ns, true));
+		Reference<Plan> qrPlan;
+		if (!cxOptional.present()) {
+			qrPlan = ref(new EmptyPlan());
+		} else {
+			qrPlan = planQuery(cxOptional.get(), query->query.getObjectField(DocLayerConstants::QUERY_FIELD));
+			qrPlan = ec->wrapOperationPlan(qrPlan, true, cxOptional.get());
+		}
 		state Reference<DistinctPredicate> distinctPredicate = ref(new DistinctPredicate(keyValue));
 		state Reference<IPredicate> predicate = any_predicate(keyValue, distinctPredicate);
 

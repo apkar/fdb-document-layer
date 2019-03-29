@@ -257,6 +257,20 @@ Future<Reference<UnboundCollectionContext>> MetadataManager::getUnboundCollectio
 	                                 createCollectionIfAbsent);
 }
 
+Future<Optional<Reference<UnboundCollectionContext>>> MetadataManager::getUnboundCollectionContextV1(
+	Reference<DocTransaction> tr,
+	Namespace const& ns,
+	bool allowSystemNamespace,
+	bool includeIndex) {
+	try {
+		Reference<UnboundCollectionContext> mcx =
+		    wait(getUnboundCollectionContext(tr, ns, allowSystemNamespace, includeIndex, false));
+		return Optional<Reference<UnboundCollectionContext>>(mcx);
+	} catch (Error &e) {
+		return Optional<Reference<UnboundCollectionContext>>();
+	}
+}
+
 Future<Reference<UnboundCollectionContext>> MetadataManager::refreshUnboundCollectionContext(
     Reference<UnboundCollectionContext> cx,
     Reference<DocTransaction> tr) {

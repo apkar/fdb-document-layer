@@ -400,34 +400,40 @@ ACTOR static Future<Void> runQuery(Reference<ExtConnection> ec,
 			throw end_of_stream();
 		}
 
-		state Reference<UnboundCollectionContext> cx = wait(ec->mm->getUnboundCollectionContext(dtr, msg->ns, true));
+		state Reference<Plan> plan;
+		Optional<Reference<UnboundCollectionContext>> cxOptional = wait(ec->mm->getUnboundCollectionContextV1(dtr, msg->ns, true));
+		if (!cxOptional.present()) {
+			plan = ref(new EmptyPlan());
+		} else {
+			state Reference<UnboundCollectionContext> cx;
+			cx = cxOptional.get();
+			// The following is required by ambiguity in the wire protocol we are speaking
+			bson::BSONObj queryObject = msg->query.hasField(DocLayerConstants::QUERY_FIELD)
+			                                ? msg->query.getObjectField(DocLayerConstants::QUERY_FIELD)
+			                                : msg->query.hasField(DocLayerConstants::QUERY_OPERATOR.c_str())
+			                                      ? msg->query.getObjectField(DocLayerConstants::QUERY_OPERATOR.c_str())
+			                                      : msg->query;
 
-		// The following is required by ambiguity in the wire protocol we are speaking
-		bson::BSONObj queryObject = msg->query.hasField(DocLayerConstants::QUERY_FIELD)
-		                                ? msg->query.getObjectField(DocLayerConstants::QUERY_FIELD)
-		                                : msg->query.hasField(DocLayerConstants::QUERY_OPERATOR.c_str())
-		                                      ? msg->query.getObjectField(DocLayerConstants::QUERY_OPERATOR.c_str())
-		                                      : msg->query;
-
-		// Plan needs to be state in case we have a sort plan,
-		// which in turn holds a reference to the actor that does the sorting
-		state Reference<Plan> plan = planQuery(cx, queryObject);
-		if (!ordering.present() && msg->numberToSkip)
-			plan = ref(new SkipPlan(msg->numberToSkip, plan));
-		plan = planProjection(plan, msg->returnFieldSelector, ordering);
-		plan = ec->wrapOperationPlan(plan, true, cx);
-		if (ordering.present()) {
-			plan = ref(new SortPlan(plan, ordering.get()));
-			if (msg->numberToSkip)
+			// Plan needs to be state in case we have a sort plan,
+			// which in turn holds a reference to the actor that does the sorting
+			plan = planQuery(cx, queryObject);
+			if (!ordering.present() && msg->numberToSkip)
 				plan = ref(new SkipPlan(msg->numberToSkip, plan));
-		}
+			plan = planProjection(plan, msg->returnFieldSelector, ordering);
+			plan = ec->wrapOperationPlan(plan, true, cx);
+			if (ordering.present()) {
+				plan = ref(new SortPlan(plan, ordering.get()));
+				if (msg->numberToSkip)
+					plan = ref(new SkipPlan(msg->numberToSkip, plan));
+			}
 
-		// return query plan explanation if `$explain` detected
-		if (msg->query.hasField("$explain")) {
-			reply = Reference<ExtMsgReply>(new ExtMsgReply(msg->header, msg->query));
-			reply->addDocument(BSON("explanation" << plan->describe()));
-			replyStream.send(reply);
-			throw end_of_stream();
+			// return query plan explanation if `$explain` detected
+			if (msg->query.hasField("$explain")) {
+				reply = Reference<ExtMsgReply>(new ExtMsgReply(msg->header, msg->query));
+				reply->addDocument(BSON("explanation" << plan->describe()));
+				replyStream.send(reply);
+				throw end_of_stream();
+			}
 		}
 
 		Reference<PlanCheckpoint> outerCheckpoint(new PlanCheckpoint);
@@ -1210,15 +1216,11 @@ ACTOR Future<WriteCmdResult> doDeleteCmd(Namespace ns,
 		state std::vector<bson::BSONObj> writeErrors;
 
 		// If collection not found then just return success from here.
-		try {
-			Reference<UnboundCollectionContext> _cx =
-			    wait(ec->mm->getUnboundCollectionContext(dtr, ns, false, true, false));
-			cx = _cx;
-		} catch (Error& e) {
-			if (e.code() == error_code_collection_not_found)
-				return WriteCmdResult(nrDeletedRecords, writeErrors);
-			throw e;
+		Optional<Reference<UnboundCollectionContext>> cxOptional = wait(ec->mm->getUnboundCollectionContextV1(dtr, ns, false, true));
+		if (!cxOptional.present()) {
+			return WriteCmdResult(nrDeletedRecords, writeErrors);
 		}
+		cx = cxOptional.get();
 
 		state std::vector<bson::BSONObj>::iterator it;
 		state int idx;
