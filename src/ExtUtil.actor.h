@@ -214,6 +214,41 @@ Future<Void> mapAsync2(GenFutureStream<T> input, F actorFunc, PromiseStream<U> o
 
 ACTOR template <class Function>
 Future<decltype(fake<Function>()(Reference<DocTransaction>()).getValue())>
+runFDBTransaction(Reference<FDB::DatabaseContext> cx, Function func, int64_t retryLimit = 0, int64_t timeout = 0) {
+	state Reference<FDB::Transaction> tr(new FDB::Transaction(cx));
+	loop {
+		try {
+			tr->setOption(FDB_TR_OPTION_CAUSAL_READ_RISKY);
+
+			if (retryLimit)
+				tr->setOption(FDB_TR_OPTION_RETRY_LIMIT, StringRef((uint8_t*)&(retryLimit), sizeof(int64_t)));
+
+			if (timeout)
+				tr->setOption(FDB_TR_OPTION_TIMEOUT, StringRef((uint8_t*)&(timeout), sizeof(int64_t)));
+
+			state decltype(fake<Function>()(Reference<DocTransaction>()).getValue()) result = wait(func(tr));
+
+			// Even though all references to actors called by func() have been dropped, some of them may still be on
+			// the physical call stack, which means that they could continue to run even after actor_cancel has been
+			// set. This can cause a used_during_commit() in some rare cases, especially if
+			// FDBPlugin_getDescendants() is involved, since it may be in a state where it issues another getRange()
+			// before its next wait(). The delay(0,0) which we wait on here gives us a new call stack, and prevents
+			// this (rare but real) problem.
+			Void _ = wait(delay(0.0));
+
+			Void _ = wait(tr->commit());
+
+			return result;
+		} catch (Error& e) {
+			if (e.code() == error_code_commit_unknown_result)
+				throw;
+			Void _ = wait(tr->onError(e));
+		}
+	}
+}
+
+ACTOR template <class Function>
+Future<decltype(fake<Function>()(Reference<DocTransaction>()).getValue())>
 runRYWTransaction(Reference<FDB::DatabaseContext> cx, Function func, int64_t retryLimit, int64_t timeout) {
 
 	state Reference<FDB::Transaction> tr(new FDB::Transaction(cx));

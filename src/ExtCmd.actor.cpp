@@ -95,7 +95,7 @@ ACTOR static Future<std::pair<int, int>> dropIndexMatching(Reference<DocTransact
 	Key indexKey = targetedCollection->getIndexesSubspace().withSuffix(StringRef(encodeMaybeDotted(matchingName)));
 	tr->tr->clear(FDB::KeyRangeRef(indexKey, strinc(indexKey)));
 
-	targetedCollection->bindCollectionContext(tr)->bumpMetadataVersion();
+	targetedCollection->bumpMetadataVersion(tr->tr);
 
 	return std::make_pair(count, 1);
 }
@@ -359,7 +359,7 @@ ACTOR static Future<int> internal_doDropIndexesActor(Reference<DocTransaction> t
 
 	Key indexes = unbound->getIndexesSubspace();
 	tr->tr->clear(FDB::KeyRangeRef(indexes, strinc(indexes)));
-	unbound->bindCollectionContext(tr)->bumpMetadataVersion();
+	unbound->bumpMetadataVersion(tr->tr);
 	TraceEvent(SevInfo, "BumpMetadataVersion")
 	    .detail("reason", "dropAllIndexes")
 	    .detail("ns", fullCollNameToString(ns));
@@ -370,6 +370,11 @@ ACTOR static Future<int> internal_doDropIndexesActor(Reference<DocTransaction> t
 ACTOR static Future<Void> Internal_doDropCollection(Reference<DocTransaction> tr,
                                                     Reference<ExtMsgQuery> query,
                                                     Reference<MetadataManager> mm) {
+	bool collExists = wait(mm->collectionExists(query->ns, tr->tr));
+	if (!collExists) {
+		return Void();
+	}
+
 	state Reference<UnboundCollectionContext> unbound = wait(mm->getUnboundCollectionContext(tr, query->ns));
 	int _ = wait(internal_doDropIndexesActor(tr, query->ns, mm));
 	Void _ = wait(unbound->collectionDirectory->remove(tr->tr));
@@ -410,6 +415,12 @@ ACTOR static Future<Reference<ExtMsgReply>> getStreamCount(Reference<ExtConnecti
                                                            Reference<ExtMsgReply> reply) {
 	try {
 		state Reference<DocTransaction> dtr = ec->getOperationTransaction();
+		bool collExists = wait(ec->mm->collectionExists(query->ns));
+		if (!collExists) {
+			reply->addDocument(BSON("n" << 0.0 << "ok" << 1.0));
+			return reply;
+		}
+
 		Reference<UnboundCollectionContext> cx = wait(ec->mm->getUnboundCollectionContext(dtr, query->ns, true));
 		Reference<Plan> plan = planQuery(cx, query->query.getObjectField(DocLayerConstants::QUERY_FIELD));
 		plan = ec->wrapOperationPlan(plan, true, cx);
@@ -445,6 +456,8 @@ ACTOR static Future<Reference<ExtMsgReply>> doFindAndModify(Reference<ExtConnect
                                                             Reference<ExtMsgQuery> query,
                                                             Reference<ExtMsgReply> reply) {
 	try {
+		Void _ = wait(ec->mm->createCollectionIfAbsent(query->ns));
+
 		state bool issort = query->query.hasField("sort");
 		state bool isremove = query->query.hasField("remove") && query->query.getField("remove").trueValue();
 		state bool isnew = query->query.hasField("new") && query->query.getField("new").trueValue() && !(isremove);
@@ -562,6 +575,16 @@ REGISTER_CMD(FindAndModifyCmd, "findandmodify");
 ACTOR static Future<Reference<ExtMsgReply>> doDropIndexesActor(Reference<ExtConnection> ec,
                                                                Reference<ExtMsgQuery> query,
                                                                Reference<ExtMsgReply> reply) {
+	bool collExists = wait(ec->mm->collectionExists(query->ns));
+	if (!collExists) {
+		// clang-format off
+		reply->addDocument(BSON("nIndexesWas" << 0 <<
+		                        "msg" << "Collection not found" <<
+		                        "ok" << 1.0));
+		// clang-format on
+		return reply;
+	}
+
 	state int dropped;
 
 	try {
@@ -663,6 +686,8 @@ REGISTER_CMD(DeleteIndexesCmd, "deleteindexes");
 ACTOR static Future<Reference<ExtMsgReply>> doCreateIndexes(Reference<ExtConnection> ec,
                                                             Reference<ExtMsgQuery> query,
                                                             Reference<ExtMsgReply> reply) {
+	Void _ = wait(ec->docLayer->mm->createCollectionIfAbsent(query->ns));
+
 	std::vector<Future<WriteCmdResult>> f;
 	std::vector<bson::BSONElement> arr = query->query.getField("indexes").Array();
 	for (auto el : arr) {

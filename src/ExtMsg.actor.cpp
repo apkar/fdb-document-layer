@@ -396,34 +396,42 @@ ACTOR static Future<Void> runQuery(Reference<ExtConnection> ec,
 			throw end_of_stream();
 		}
 
-		state Reference<UnboundCollectionContext> cx = wait(ec->mm->getUnboundCollectionContext(dtr, msg->ns, true));
+		bool collExists = wait(ec->mm->collectionExists(msg->ns, dtr->tr));
 
-		// The following is required by ambiguity in the wire protocol we are speaking
-		bson::BSONObj queryObject = msg->query.hasField(DocLayerConstants::QUERY_FIELD)
-		                                ? msg->query.getObjectField(DocLayerConstants::QUERY_FIELD)
-		                                : msg->query.hasField(DocLayerConstants::QUERY_OPERATOR.c_str())
-		                                      ? msg->query.getObjectField(DocLayerConstants::QUERY_OPERATOR.c_str())
-		                                      : msg->query;
+		state Reference<Plan> plan;
+		if (collExists) {
+			state Reference<UnboundCollectionContext> cx =
+			    wait(ec->mm->getUnboundCollectionContext(dtr, msg->ns, true));
 
-		// Plan needs to be state in case we have a sort plan, which in turn holds a reference to the actor that does
-		// the sorting
-		state Reference<Plan> plan = planQuery(cx, queryObject);
-		if (!ordering.present() && msg->numberToSkip)
-			plan = ref(new SkipPlan(msg->numberToSkip, plan));
-		plan = planProjection(plan, msg->returnFieldSelector, ordering);
-		plan = ec->wrapOperationPlan(plan, true, cx);
-		if (ordering.present()) {
-			plan = ref(new SortPlan(plan, ordering.get()));
-			if (msg->numberToSkip)
+			// The following is required by ambiguity in the wire protocol we are speaking
+			bson::BSONObj queryObject = msg->query.hasField(DocLayerConstants::QUERY_FIELD)
+			                                ? msg->query.getObjectField(DocLayerConstants::QUERY_FIELD)
+			                                : msg->query.hasField(DocLayerConstants::QUERY_OPERATOR.c_str())
+			                                      ? msg->query.getObjectField(DocLayerConstants::QUERY_OPERATOR.c_str())
+			                                      : msg->query;
+
+			// Plan needs to be state in case we have a sort plan, which in turn holds a reference to the actor that
+			// does the sorting
+			plan = planQuery(cx, queryObject);
+			if (!ordering.present() && msg->numberToSkip)
 				plan = ref(new SkipPlan(msg->numberToSkip, plan));
-		}
+			plan = planProjection(plan, msg->returnFieldSelector, ordering);
+			plan = ec->wrapOperationPlan(plan, true, cx);
+			if (ordering.present()) {
+				plan = ref(new SortPlan(plan, ordering.get()));
+				if (msg->numberToSkip)
+					plan = ref(new SkipPlan(msg->numberToSkip, plan));
+			}
 
-		// return query plan explanation if `$explain` detected
-		if (msg->query.hasField("$explain")) {
-			reply = Reference<ExtMsgReply>(new ExtMsgReply(msg->header, msg->query));
-			reply->addDocument(BSON("explanation" << plan->describe()));
-			replyStream.send(reply);
-			throw end_of_stream();
+			// return query plan explanation if `$explain` detected
+			if (msg->query.hasField("$explain")) {
+				reply = Reference<ExtMsgReply>(new ExtMsgReply(msg->header, msg->query));
+				reply->addDocument(BSON("explanation" << plan->describe()));
+				replyStream.send(reply);
+				throw end_of_stream();
+			}
+		} else {
+			plan = ref(new EmptyPlan());
 		}
 
 		Reference<PlanCheckpoint> outerCheckpoint(new PlanCheckpoint);
@@ -846,8 +854,11 @@ ACTOR Future<WriteCmdResult> attemptIndexInsertion(bson::BSONObj indexObj,
 ACTOR Future<WriteCmdResult> doInsertCmd(Namespace ns,
                                          std::list<bson::BSONObj>* documents,
                                          Reference<ExtConnection> ec) {
-	state Reference<DocTransaction> tr = ec->getOperationTransaction();
 	state uint64_t startTime = timer_int();
+
+	Void _ = wait(ec->docLayer->mm->createCollectionIfAbsent(ns));
+
+	state Reference<DocTransaction> tr = ec->getOperationTransaction();
 
 	if (ns.second == DocLayerConstants::SYSTEM_INDEXES) {
 		if (verboseLogging)
@@ -1052,6 +1063,8 @@ ACTOR Future<WriteCmdResult> doUpdateCmd(Namespace ns,
                                          bool ordered,
                                          std::vector<ExtUpdateCmd>* cmds,
                                          Reference<ExtConnection> ec) {
+	Void _ = wait(ec->mm->createCollectionIfAbsent(ns));
+
 	state WriteCmdResult cmdResult;
 	state int idx;
 	for (idx = 0; idx < cmds->size(); idx++) {
@@ -1229,13 +1242,17 @@ ACTOR Future<WriteCmdResult> doDeleteCmd(Namespace ns,
                                          Reference<ExtConnection> ec) {
 	try {
 		state Reference<DocTransaction> dtr = ec->getOperationTransaction();
+		bool collExists = wait(ec->mm->collectionExists(ns, dtr->tr));
+		if (!collExists)
+			return WriteCmdResult(0, std::vector<bson::BSONObj>());
+
 		state Reference<UnboundCollectionContext> cx;
 		state int64_t nrDeletedRecords = 0;
 		state std::vector<bson::BSONObj> writeErrors;
 
 		// If collection not found then just return success from here.
 		try {
-			Reference<UnboundCollectionContext> _cx = wait(ec->mm->getUnboundCollectionContext(dtr, ns, false, false));
+			Reference<UnboundCollectionContext> _cx = wait(ec->mm->getUnboundCollectionContext(dtr, ns, false));
 			cx = _cx;
 		} catch (Error& e) {
 			if (e.code() == error_code_collection_not_found)

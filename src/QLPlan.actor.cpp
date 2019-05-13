@@ -107,7 +107,7 @@ Optional<Reference<Plan>> TableScanPlan::push_down(Reference<UnboundCollectionCo
 			}
 		} else {
 			std::string indexKey = anyPred->expr->get_index_key();
-			Optional<IndexInfo> oIndex = cx->getSimpleIndex(indexKey);
+			Optional<Reference<IndexInfo>> oIndex = cx->getSimpleIndex(indexKey);
 			if (oIndex.present()) {
 				Optional<DataValue> begin, end;
 				anyPred->pred->get_range(begin, end);
@@ -200,7 +200,7 @@ Optional<Reference<Plan>> IndexScanPlan::push_down(Reference<UnboundCollectionCo
 		switch (query->getTypeCode()) {
 		case IPredicate::ANY: {
 			auto anyPred = dynamic_cast<AnyPredicate*>(query.getPtr());
-			Optional<IndexInfo> oIndex = cx->getCompoundIndex(matchedPrefix, anyPred->expr->get_index_key());
+			Optional<Reference<IndexInfo>> oIndex = cx->getCompoundIndex(matchedPrefix, anyPred->expr->get_index_key());
 			if (oIndex.present()) {
 				Optional<DataValue> beginSuffix, endSuffix;
 				anyPred->pred->get_range(beginSuffix, endSuffix);
@@ -419,14 +419,14 @@ ACTOR static Future<bool> compoundWouldBeLast(Reference<ScanReturnedContext> doc
 }
 
 ACTOR static Future<Void> deduplicateIndexStream(PlanCheckpoint* checkpoint,
-                                                 IndexInfo self,
+                                                 Reference<IndexInfo> self,
                                                  FDB::Key indexUpperBound,
                                                  FutureStream<Reference<ScanReturnedContext>> dis,
                                                  PromiseStream<Reference<ScanReturnedContext>> filtered) {
 	state Deque<std::pair<Reference<ScanReturnedContext>, Future<bool>>> futures;
 	state std::pair<Reference<ScanReturnedContext>, Future<bool>> p;
 	state std::vector<Reference<IExpression>> exprs;
-	for (const auto& indexKey : self.indexKeys)
+	for (const auto& indexKey : self->indexKeys)
 		exprs.push_back(Reference<IExpression>(new ExtPathExpression(indexKey.first, true, true)));
 	state FlowLock* flowControlLock = checkpoint->getDocumentFinishedLock();
 	try {
@@ -435,8 +435,8 @@ ACTOR static Future<Void> deduplicateIndexStream(PlanCheckpoint* checkpoint,
 				choose {
 					when(Reference<ScanReturnedContext> nextInput = waitNext(dis)) {
 						futures.push_back(std::pair<Reference<ScanReturnedContext>, Future<bool>>(
-						    nextInput, (self.size() == 1 ? simpleWouldBeLast : compoundWouldBeLast)(nextInput, exprs,
-						                                                                            indexUpperBound)));
+						    nextInput, (self->size() == 1 ? simpleWouldBeLast : compoundWouldBeLast)(nextInput, exprs,
+						                                                                             indexUpperBound)));
 					}
 					when(bool pass = wait(futures.empty() ? Never() : futures.front().second)) {
 						if (pass)
@@ -479,7 +479,7 @@ ACTOR static Future<Void> deduplicateIndexStream(PlanCheckpoint* checkpoint,
 
 FutureStream<Reference<ScanReturnedContext>> IndexScanPlan::execute(PlanCheckpoint* checkpoint,
                                                                     Reference<DocTransaction> tr) {
-	Reference<QueryContext> index_cx = index.indexCx->bindQueryContext(tr);
+	Reference<QueryContext> index_cx = index->indexCx->bindQueryContext(tr);
 	Reference<CollectionContext> bcx = cx->bindCollectionContext(tr);
 	int scanID = checkpoint->addScan();
 	PromiseStream<Reference<ScanReturnedContext>> p;
@@ -492,7 +492,7 @@ FutureStream<Reference<ScanReturnedContext>> IndexScanPlan::execute(PlanCheckpoi
 	GenFutureStream<KeyValue> kvs = index_cx->getDescendants(lowerBound, upperBound, flowControlLock);
 	checkpoint->addOperation(kvs.actor && toDocInfo(checkpoint, bcx->cx, scanID, kvs, p, flowControlLock), p);
 
-	if (begin.present() && end.present() && begin.get() == end.get() && index.size() == 1) {
+	if (begin.present() && end.present() && begin.get() == end.get() && index->size() == 1) {
 		return p.getFuture();
 	} else {
 		PromiseStream<Reference<ScanReturnedContext>> p2;
@@ -1420,8 +1420,8 @@ ACTOR static Future<Void> doIndexInsert(PlanCheckpoint* checkpoint,
 		}
 
 		Reference<IReadWriteContext> doc = wait(indexInsert->insert(unbound->bindCollectionContext(tr)));
-		mcx->bindCollectionContext(tr)->bumpMetadataVersion();
-		TraceEvent(SevInfo, "BumpMetadataVersion")
+		mcx->bumpMetadataVersion(tr->tr);
+		TraceEvent(SevInfo, "M_BumpVersion")
 		    .detail("reason", "createIndex")
 		    .detail("ns", fullCollNameToString(ns))
 		    .detail("index", indexObj.toString());
@@ -1563,8 +1563,7 @@ ACTOR static Future<Void> updateIndexStatus(PlanCheckpoint* checkpoint,
 		state Reference<UnboundCollectionContext> indexCollection = wait(mm->indexesCollection(tr, ns.first));
 		state Reference<QueryContext> indexDoc =
 		    indexCollection->bindCollectionContext(tr)->cx->getSubContext(encodedIndexId);
-		Reference<UnboundCollectionContext> ucx = wait(mm->getUnboundCollectionContext(tr, ns));
-		state Reference<CollectionContext> mcx = ucx->bindCollectionContext(tr);
+		state Reference<UnboundCollectionContext> ucx = wait(mm->getUnboundCollectionContext(tr, ns));
 		Optional<DataValue> dv =
 		    wait(indexDoc->get(DataValue(DocLayerConstants::BUILD_ID_FIELD, DVTypeCode::STRING).encode_key_part()));
 		if (dv.present()) {
@@ -1591,7 +1590,7 @@ ACTOR static Future<Void> updateIndexStatus(PlanCheckpoint* checkpoint,
 			indexDoc->clear(
 			    DataValue(DocLayerConstants::CURRENTLY_PROCESSING_DOC_FIELD, DVTypeCode::STRING).encode_key_part());
 			indexDoc->clear(DataValue(DocLayerConstants::BUILD_ID_FIELD, DVTypeCode::STRING).encode_key_part());
-			mcx->bumpMetadataVersion();
+			ucx->bumpMetadataVersion(tr->tr);
 			TraceEvent(SevInfo, "BumpMetadataVersion")
 			    .detail("reason", "updateIndexStatus")
 			    .detail("ns", fullCollNameToString(ns))
@@ -1616,10 +1615,10 @@ FutureStream<Reference<ScanReturnedContext>> UpdateIndexStatusPlan::execute(Plan
 	return output.getFuture();
 }
 
-ACTOR static Future<Void> buildIndexEntry(Reference<ScanReturnedContext> doc, IndexInfo index) {
+ACTOR static Future<Void> buildIndexEntry(Reference<ScanReturnedContext> doc, Reference<IndexInfo> index) {
 	// This is sufficient even for compound indexes, because we have one index entry per document, so
 	// dirtying one of the indexed fields causes the plugin to rewrite the entry.
-	state Standalone<StringRef> index_key = StringRef(encodeMaybeDotted(index.indexKeys[0].first));
+	state Standalone<StringRef> index_key = StringRef(encodeMaybeDotted(index->indexKeys[0].first));
 	Optional<DataValue> odv = wait(doc->get(index_key));
 
 	// Don't need to worry about objects or arrays, because even if
@@ -1669,7 +1668,7 @@ std::string unstrincObjectId(StringRef encodedKeyPart) {
 
 ACTOR static Future<Void> scanAndBuildIndex(PlanCheckpoint* checkpoint,
                                             Reference<DocTransaction> tr,
-                                            IndexInfo index,
+                                            Reference<IndexInfo> index,
                                             std::string dbName,
                                             Standalone<StringRef> encodedIndexId,
                                             Reference<MetadataManager> mm,
@@ -1755,9 +1754,9 @@ FutureStream<Reference<ScanReturnedContext>> BuildIndexPlan::execute(PlanCheckpo
 }
 
 bool BuildIndexPlan::wasMetadataChangeOkay(Reference<UnboundCollectionContext> newCx) {
-	for (IndexInfo i : newCx->knownIndexes) {
-		if (i.indexName == index.indexName && i.status == IndexInfo::IndexStatus::BUILDING &&
-		    i.buildId.get() == index.buildId.get())
+	for (Reference<IndexInfo> i : newCx->knownIndexes) {
+		if (i->indexName == index->indexName && i->status == IndexInfo::IndexStatus::BUILDING &&
+		    i->buildId.get() == index->buildId.get())
 			return scan->wasMetadataChangeOkay(newCx);
 	}
 	return false;

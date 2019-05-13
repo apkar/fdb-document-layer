@@ -79,11 +79,13 @@ class Predicates(object):
 
 # PK Lookup Tests
 def test_pk_lookup(fixture_collection):
+    fixture_collection.insert_one({'a': 'A'})
     ret = fixture_collection.find({'_id': 1}).explain()
     assert Predicates.pk_lookup_no_filter(ret['explanation'])
 
 
 def test_pk_scan(fixture_collection):
+    fixture_collection.insert_one({'a': 'A'})
     ret = fixture_collection.find({'_id': {'$gt': 1}}).explain()
     assert Predicates.pk_lookup(ret['explanation'])
 

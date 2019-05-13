@@ -243,7 +243,7 @@ private:
 
 struct IndexScanPlan : ConcretePlan<IndexScanPlan> {
 	IndexScanPlan(Reference<UnboundCollectionContext> cx,
-	              IndexInfo index,
+	              Reference<IndexInfo> index,
 	              Optional<std::string> begin,
 	              Optional<std::string> end,
 	              std::vector<std::string> matchedPrefix)
@@ -254,7 +254,7 @@ struct IndexScanPlan : ConcretePlan<IndexScanPlan> {
 		return BSON(
 		    // clang-format off
 			"type" << "index scan" <<
-			"index name" << index.indexName <<
+			"index name" << index->indexName <<
 			"bounds" << BSON(
 				"begin" << bound_begin <<
 				"end" << bound_end)
@@ -270,7 +270,7 @@ struct IndexScanPlan : ConcretePlan<IndexScanPlan> {
 
 private:
 	Reference<UnboundCollectionContext> cx;
-	IndexInfo index;
+	Reference<IndexInfo> index;
 	Optional<std::string> begin;
 	Optional<std::string> end;
 
@@ -642,13 +642,13 @@ struct IndexInsertPlan : ConcretePlan<IndexInsertPlan> {
 
 struct BuildIndexPlan : ConcretePlan<BuildIndexPlan> {
 	Reference<Plan> scan;
-	IndexInfo index;
+	Reference<IndexInfo> index;
 	std::string dbName;
 	Standalone<StringRef> encodedIndexId;
 	Reference<MetadataManager> mm;
 
 	BuildIndexPlan(Reference<Plan> scan,
-	               IndexInfo index,
+	               Reference<IndexInfo> index,
 	               std::string const& dbName,
 	               Standalone<StringRef> encodedIndexId,
 	               Reference<MetadataManager> mm)
